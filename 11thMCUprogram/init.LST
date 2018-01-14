@@ -1,0 +1,391 @@
+C51 COMPILER V9.02   INIT                                                                  03/03/2015 16:53:09 PAGE 1   
+
+
+C51 COMPILER V9.02, COMPILATION OF MODULE INIT
+OBJECT MODULE PLACED IN init.OBJ
+COMPILER INVOKED BY: C:\Keil\C51\BIN\C51.exe init.h DB OE INCDIR(C:\SiLabs\MCU\Inc)
+
+line level    source
+
+   1          //---------------------------------------------------------------
+   2          // CYGNAL Integrated Products 
+   3          //
+   4          // C Code Configuration Tool: F020 INITIALIZATION/CONFIGURATION CODE
+   5          //----------------------------------------------------------------
+   6          // This file is read only. To insert the code into your  
+   7          // application, simply cut and paste or use the "Save As" 
+   8          // command in the file menu to save the file in your project 
+   9          // directory. 
+  10          //----------------------------------------------------------------
+  11          
+  12          //----------------------------------------------------------------
+  13          // INCLUDES
+  14          //----------------------------------------------------------------
+  15          
+  16          #include <C8051F020.h>  // Register definition file.
+  17          #include <intrins.h>
+  18          
+  19          //------------------------------------------------------------------------------------
+  20          // Global CONSTANTS
+  21          //------------------------------------------------------------------------------------
+  22          
+  23          //------------------------------------------------------------------------------------
+  24          // Function PROTOTYPES
+  25          //------------------------------------------------------------------------------------
+  26          
+  27          //------------------------------------------------------------------------------------
+  28          // Config Routine
+  29          //------------------------------------------------------------------------------------
+  30          void config (void) {
+  31   1      
+  32   1      //Local Variable Definitions
+  33   1          int n = 0;
+  34   1      
+  35   1              
+  36   1      
+  37   1      //----------------------------------------------------------------
+  38   1      // Watchdog Timer Configuration
+  39   1      //
+  40   1      // WDTCN.[7:0]: WDT Control
+  41   1      //   Writing 0xA5 enables and reloads the WDT.
+  42   1      //   Writing 0xDE followed within 4 clocks by 0xAD disables the WDT
+  43   1      //   Writing 0xFF locks out disable feature.
+  44   1      //
+  45   1      // WDTCN.[2:0]: WDT timer interval bits
+  46   1      //   NOTE! When writing interval bits, bit 7 must be a 0.
+  47   1      //
+  48   1      //  Bit 2 | Bit 1 | Bit 0
+  49   1      //------------------------     
+  50   1      //    1   |   1   |   1      Timeout interval = 1048576 x Tsysclk
+  51   1      //    1   |   1   |   0      Timeout interval =  262144 x Tsysclk
+  52   1      //    1   |   0   |   1      Timeout interval =   65636 x Tsysclk
+  53   1      //    1   |   0   |   0      Timeout interval =   16384 x Tsysclk
+  54   1      //    0   |   1   |   1      Timeout interval =    4096 x Tsysclk
+  55   1      //    0   |   1   |   0      Timeout interval =    1024 x Tsysclk
+C51 COMPILER V9.02   INIT                                                                  03/03/2015 16:53:09 PAGE 2   
+
+  56   1      //    0   |   0   |   1      Timeout interval =     256 x Tsysclk
+  57   1      //    0   |   0   |   0      Timeout interval =          64 x Tsysclk
+  58   1      // 
+  59   1      //------------------------
+  60   1      
+  61   1              WDTCN = 0x07;   // Watchdog Timer Control Register
+  62   1          WDTCN = 0xDE;   // Disable WDT
+  63   1          WDTCN = 0xAD;
+  64   1      
+  65   1      //----------------------------------------------------------------
+  66   1      // CROSSBAR REGISTER CONFIGURATION
+  67   1      //
+  68   1      // NOTE: The crossbar register should be configured before any  
+  69   1      // of the digital peripherals are enabled. The pinout of the 
+  70   1      // device is dependent on the crossbar configuration so caution 
+  71   1      // must be exercised when modifying the contents of the XBR0, 
+  72   1      // XBR1, and XBR2 registers. For detailed information on 
+  73   1      // Crossbar Decoder Configuration, refer to Application Note 
+  74   1      // AN001, "Configuring the Port I/O Crossbar Decoder". 
+  75   1      //----------------------------------------------------------------
+  76   1      
+  77   1      // Configure the XBRn Registers
+  78   1      
+  79   1              XBR0 = 0x07;    // XBAR0: Initial Reset Value
+  80   1              XBR1 = 0x00;    // XBAR1: Initial Reset Value
+  81   1              XBR2 = 0x40;    // XBAR2: Initial Reset Value
+  82   1      // Select Pin I/0
+  83   1      
+  84   1      // NOTE: Some peripheral I/O pins can function as either inputs or 
+  85   1      // outputs, depending on the configuration of the peripheral. By default,
+  86   1      // the configuration utility will configure these I/O pins as push-pull 
+  87   1      // outputs.
+  88   1                            // Port configuration (1 = Push Pull Output)
+  89   1          P0MDOUT = 0x1D; // Output configuration for P0 
+  90   1          P1MDOUT = 0x04; // Output configuration for P1 
+  91   1          P2MDOUT = 0x00; // Output configuration for P2 
+  92   1          P3MDOUT = 0x00; // Output configuration for P3 
+  93   1          P74OUT = 0x00;  // Output configuration for P4-7
+  94   1      
+  95   1          P1MDIN = 0xFF;  // Input configuration for P1
+  96   1      
+  97   1      // View port pinout
+  98   1      
+  99   1                      // The current Crossbar configuration results in the 
+ 100   1                      // following port pinout assignment:
+ 101   1                      // Port 0
+ 102   1                      // P0.0 = UART TX0        (Push-Pull Output)
+ 103   1                      // P0.1 = UART RX0        (Open-Drain Output/Input)
+ 104   1                      // P0.2 = SPI Bus SCK     (Push-Pull Output)
+ 105   1                      // P0.3 = SPI Bus MISO    (Push-Pull Output)
+ 106   1                      // P0.4 = SPI Bus MOSI    (Push-Pull Output)
+ 107   1                      // P0.5 = SPI Bus NSS     (Open-Drain Output/Input)
+ 108   1                      // P0.6 = SMBus SDA       (Open-Drain Output/Input)
+ 109   1                      // P0.7 = SMBus SCL       (Open-Drain Output/Input)
+ 110   1      
+ 111   1                      // Port 1
+ 112   1                      // P1.0 = GP I/O          (Open-Drain Output/Input)(Digital)
+ 113   1                      // P1.1 = GP I/O          (Open-Drain Output/Input)(Digital)
+ 114   1                      // P1.2 = GP I/O          (Push-Pull Output)(Digital)
+ 115   1                      // P1.3 = GP I/O          (Open-Drain Output/Input)(Digital)
+ 116   1                      // P1.4 = GP I/O          (Open-Drain Output/Input)(Digital)
+ 117   1                      // P1.5 = GP I/O          (Open-Drain Output/Input)(Digital)
+C51 COMPILER V9.02   INIT                                                                  03/03/2015 16:53:09 PAGE 3   
+
+ 118   1                      // P1.6 = GP I/O          (Open-Drain Output/Input)(Digital)
+ 119   1                      // P1.7 = GP I/O          (Open-Drain Output/Input)(Digital)
+ 120   1                                              
+ 121   1                      // Port 2               
+ 122   1                      // P2.0 = GP I/O          (Open-Drain Output/Input)
+ 123   1                      // P2.1 = GP I/O          (Open-Drain Output/Input)
+ 124   1                      // P2.2 = GP I/O          (Open-Drain Output/Input)
+ 125   1                      // P2.3 = GP I/O          (Open-Drain Output/Input)
+ 126   1                      // P2.4 = GP I/O          (Open-Drain Output/Input)
+ 127   1                      // P2.5 = GP I/O          (Open-Drain Output/Input)
+ 128   1                      // P2.6 = GP I/O          (Open-Drain Output/Input)
+ 129   1                      // P2.7 = GP I/O          (Open-Drain Output/Input)
+ 130   1      
+ 131   1                      // Port 3               
+ 132   1                      // P3.0 = GP I/O          (Open-Drain Output/Input)
+ 133   1                      // P3.1 = GP I/O          (Open-Drain Output/Input)
+ 134   1                      // P3.2 = GP I/O          (Open-Drain Output/Input)
+ 135   1                      // P3.3 = GP I/O          (Open-Drain Output/Input)
+ 136   1                      // P3.4 = GP I/O          (Open-Drain Output/Input)
+ 137   1                      // P3.5 = GP I/O          (Open-Drain Output/Input)
+ 138   1                      // P3.6 = GP I/O          (Open-Drain Output/Input)
+ 139   1                      // P3.7 = GP I/O          (Open-Drain Output/Input)
+ 140   1      
+ 141   1          EMI0CF = 0x20;    // External Memory Configuration Register
+ 142   1      
+ 143   1      //----------------------------------------------------------------
+ 144   1      // Comparators Register Configuration
+ 145   1      //
+ 146   1      // Bit 7  | Bit 6  | Bit 5  | Bit 4  | Bit 3 | Bit 2 | Bit 1 | Bit 0
+ 147   1      //------------------------------------------------------------------     
+ 148   1      //  R/W   |    R   |  R/W   |  R/W   |  R/W  |  R/W  |  R/W  |  R/W
+ 149   1      //------------------------------------------------------------------
+ 150   1      // Enable | Output | Rising | Falling|  Positive     |  Negative    
+ 151   1      //        | State  | Edge   | Edge   |  Hysterisis   |  Hysterisis    
+ 152   1      //        | Flag   | Int.   | Int.   |  00: Disable  |  00: Disable
+ 153   1      //        |        | Flag   | Flag   |  01:  5mV     |  01:  5mV  
+ 154   1      //        |        |        |        |  10: 10mV     |  10: 10mV
+ 155   1      //        |        |        |        |  11: 20mV     |  11: 20mV 
+ 156   1      // ----------------------------------------------------------------
+ 157   1      
+ 158   1              CPT0CN = 0x00;  // Comparator 0 Control Register
+ 159   1              
+ 160   1      
+ 161   1              CPT1CN = 0x00;  // Comparator 1 Control Register
+ 162   1              
+ 163   1              //Comp1 marker
+ 164   1                                              
+ 165   1      //----------------------------------------------------------------
+ 166   1      // Oscillator Configuration
+ 167   1      //----------------------------------------------------------------
+ 168   1      
+ 169   1              OSCXCN = 0x67;  // EXTERNAL Oscillator Control Register 
+ 170   1          for (n = 0; n < 255; n++) ;            // wait for osc to start
+ 171   1          while ( (OSCXCN & 0x80) == 0 );        // wait for xtal to stabilize
+ 172   1      
+ 173   1              OSCICN = 0x08;  // Internal Oscillator Control Register
+ 174   1      
+ 175   1              
+ 176   1      //----------------------------------------------------------------
+ 177   1      // Reference Control Register Configuration
+ 178   1      //----------------------------------------------------------------
+ 179   1      
+C51 COMPILER V9.02   INIT                                                                  03/03/2015 16:53:09 PAGE 4   
+
+ 180   1              REF0CN = 0x02;  // Reference Control Register
+ 181   1      //      REF0CN = 0x07;  //使能片内参考电压
+ 182   1      
+ 183   1      //----------------------------------------------------------------
+ 184   1      // ADC Configuration
+ 185   1      //----------------------------------------------------------------
+ 186   1      
+ 187   1              AMX0CF = 0x60;  // AMUX Configuration Register
+ 188   1              AMX0SL = 0x00;  // AMUX Channel Select Register
+ 189   1              ADC0CF = 0xF8;  // ADC Configuration Register
+ 190   1              ADC0CN = 0x80;  // ADC Control Register
+ 191   1              
+ 192   1              ADC0LTH = 0x00; // ADC Less-Than High Byte Register
+ 193   1              ADC0LTL = 0x00; // ADC Less-Than Low Byte Register
+ 194   1              ADC0GTH = 0xFF; // ADC Greater-Than High Byte Register
+ 195   1              ADC0GTL = 0xFF; // ADC Greater-Than Low Byte Register
+ 196   1      
+ 197   1          AMX1SL = 0x00;  // AMUX1 Channel Select Register
+ 198   1          ADC1CF = 0xF8;  // ADC1 Configuration Register
+ 199   1          ADC1CN = 0x00;  // ADC1 Control Register
+ 200   1      
+ 201   1      //----------------------------------------------------------------
+ 202   1      // DAC Configuration
+ 203   1      //----------------------------------------------------------------
+ 204   1      
+ 205   1              DAC0CN = 0x80;  // DAC0 Control Register
+ 206   1              DAC0L = 0x55;   // DAC0 Low Byte Register
+ 207   1              DAC0H = 0x10;   // DAC0 High Byte Register
+ 208   1      
+ 209   1              DAC1CN = 0x80;  // DAC1 Control Register
+ 210   1              DAC1L = 0x00;   // DAC1 Low Byte Register
+ 211   1              DAC1H = 0x00;   // DAC1 High Byte Register
+ 212   1      
+ 213   1      //----------------------------------------------------------------
+ 214   1      // SPI Configuration
+ 215   1      //----------------------------------------------------------------
+ 216   1      
+ 217   1              SPI0CN = 0x02;  // SPI Control Register
+ 218   1              SPI0CFG = 0x47; // SPI Configuration Register
+ 219   1              SPI0CKR = 0x63; // SPI Clock Rate Register
+ 220   1          SPI0CN |= 0x01;
+ 221   1      
+ 222   1      //----------------------------------------------------------------
+ 223   1      // UART Configuration
+ 224   1      //----------------------------------------------------------------
+ 225   1      
+ 226   1          SCON0 = 0x50;       // Serial Port Control Register
+ 227   1          SADEN0 = 0x00;      // Serial 0 Slave Address Enable
+ 228   1          SADDR0 = 0x00;      // Serial 0 Slave Address Register
+ 229   1      
+ 230   1          PCON = 0x00;        // Power Control Register
+ 231   1      
+ 232   1          SCON1 = 0x00;       // Serial Port 1 Control Register   
+ 233   1          SADEN1 = 0x00;      // Serial 1 Slave Address Enable
+ 234   1              SADDR1 = 0x00;      // Serial 1 Slave Address Register
+ 235   1      
+ 236   1      //----------------------------------------------------------------
+ 237   1      // SMBus Configuration
+ 238   1      //----------------------------------------------------------------
+ 239   1      
+ 240   1              SMB0CN = 0x00;  // SMBus Control Register
+ 241   1              SMB0ADR = 0x00; // SMBus Address Register
+C51 COMPILER V9.02   INIT                                                                  03/03/2015 16:53:09 PAGE 5   
+
+ 242   1              SMB0CR = 0x00;  // SMBus Clock Rate Register
+ 243   1      
+ 244   1      
+ 245   1      //----------------------------------------------------------------
+ 246   1      // PCA Configuration
+ 247   1      //----------------------------------------------------------------
+ 248   1      
+ 249   1          PCA0MD = 0x00;       // PCA Mode Register
+ 250   1          PCA0CN = 0x00;      // PCA Control Register
+ 251   1          PCA0H = 0x00;       // PCA Counter/Timer High Byte  
+ 252   1          PCA0L = 0x00;       // PCA Counter/Timer Low Byte
+ 253   1              
+ 254   1      
+ 255   1          //Module 0
+ 256   1          PCA0CPM0 = 0x00;    // PCA Capture/Compare Register 0
+ 257   1          PCA0CPL0 = 0x00;    // PCA Counter/Timer Low Byte
+ 258   1          PCA0CPH0 = 0x00;    // PCA Counter/Timer High Byte
+ 259   1      
+ 260   1          //Module 1
+ 261   1          PCA0CPM1 = 0x00;    // PCA Capture/Compare Register 1
+ 262   1          PCA0CPL1 = 0x00;    // PCA Counter/Timer Low Byte
+ 263   1          PCA0CPH1 = 0x00;    // PCA Counter/Timer High Byte
+ 264   1      
+ 265   1          //Module 2
+ 266   1          PCA0CPM2 = 0x00;    // PCA Capture/Compare Register 2
+ 267   1          PCA0CPL2 = 0x00;    // PCA Counter/Timer Low Byte
+ 268   1          PCA0CPH2 = 0x00;    // PCA Counter/Timer High Byte
+ 269   1      
+ 270   1          //Module 3
+ 271   1          PCA0CPM3 = 0x00;    // PCA Capture/Compare Register 3
+ 272   1          PCA0CPL3 = 0x00;    // PCA Counter/Timer Low Byte
+ 273   1          PCA0CPH3 = 0x00;    // PCA Counter/Timer High Byte
+ 274   1      
+ 275   1          //Module 4
+ 276   1          PCA0CPM4 = 0x00;    // PCA Capture/Compare Register 4
+ 277   1          PCA0CPL4 = 0x00;    // PCA Counter/Timer Low Byte
+ 278   1          PCA0CPH4 = 0x00;    // PCA Counter/Timer High Byte
+ 279   1              
+ 280   1      //----------------------------------------------------------------
+ 281   1      // Timer Configuration
+ 282   1      //----------------------------------------------------------------
+ 283   1      
+ 284   1          CKCON = 0x00;   // Clock Control Register
+ 285   1          TH0 = 0xFC;     // Timer 0 High Byte
+ 286   1          TL0 = 0xBE;     // Timer 0 Low Byte
+ 287   1      
+ 288   1          TH1 = 0x00;     // Timer 1 High Byte        
+ 289   1          TL1 = 0x00;     // Timer 1 Low Byte
+ 290   1          TMOD = 0x01;    // Timer Mode Register
+ 291   1          TCON = 0x10;    // Timer Control Register 
+ 292   1          //FFFD 115200
+ 293   1              //FFFA 57600
+ 294   1              //FFF7 38400 
+ 295   1              //FFEE 19200
+ 296   1              //FFDC 9600
+ 297   1              //FFB8 4800
+ 298   1          RCAP2H = 0xFF;  // Timer 2 Capture Register High Byte
+ 299   1          RCAP2L = 0xFD;  // Timer 2 Capture Register Low Byte        
+ 300   1          TH2 = 0x00;     // Timer 2 High Byte        
+ 301   1          TL2 = 0x00;     // Timer 2 Low Byte 
+ 302   1          T2CON = 0x34;   // Timer 2 Control Register
+ 303   1                      
+C51 COMPILER V9.02   INIT                                                                  03/03/2015 16:53:09 PAGE 6   
+
+ 304   1          TMR3RLL = 0xC1; // Timer 3 Reload Register Low Byte
+ 305   1          TMR3RLH = 0xA2; // Timer 3 Reload Register High Byte
+ 306   1          TMR3H = 0xA2;   // Timer 3 High Byte
+ 307   1          TMR3L = 0xC1;   // Timer 3 Low Byte
+ 308   1          TMR3CN = 0x04;  // Timer 3 Control Register
+ 309   1      
+ 310   1          RCAP4H = 0x00;  // Timer 4 Capture Register High Byte
+ 311   1          RCAP4L = 0x00;  // Timer 4 Capture Register Low Byte
+ 312   1          TH4 = 0x00;     // Timer 4 High Byte
+ 313   1          TL4 = 0x00;     // Timer 4 Low Byte
+ 314   1          T4CON = 0x00;   // Timer 4 Control Register
+ 315   1      
+ 316   1      //----------------------------------------------------------------
+ 317   1      // Reset Source Configuration
+ 318   1      //
+ 319   1      // Bit 7  | Bit 6  | Bit 5  | Bit 4  | Bit 3 | Bit 2 | Bit 1 | Bit 0
+ 320   1      //------------------------------------------------------------------     
+ 321   1      //    R  |   R/W  |  R/W   |  R/W   |   R   |   R   |  R/W  |  R
+ 322   1      //------------------------------------------------------------------
+ 323   1      //  JTAG  |Convert | Comp.0 | S/W    | WDT   | Miss. | POR   | HW
+ 324   1      // Reset  |Start   | Reset/ | Reset  | Reset | Clock | Force | Pin
+ 325   1      // Flag   |Reset/  | Enable | Force  | Flag  | Detect| &     | Reset
+ 326   1      //        |Enable  | Flag   | &      |       | Flag  | Flag  | Flag
+ 327   1      //        |Flag    |        | Flag   |       |       |       |
+ 328   1      //------------------------------------------------------------------
+ 329   1      // NOTE! : Comparator 0 must be enabled before it is enabled as a 
+ 330   1      // reset source.
+ 331   1      //
+ 332   1      // NOTE! : External CNVSTR must be enalbed through the crossbar, and
+ 333   1      // the crossbar enabled prior to enabling CNVSTR as a reset source 
+ 334   1      //------------------------------------------------------------------
+ 335   1      
+ 336   1              RSTSRC = 0x00;  // Reset Source Register
+ 337   1      
+ 338   1      
+ 339   1      //----------------------------------------------------------------
+ 340   1      // Interrupt Configuration
+ 341   1      //----------------------------------------------------------------
+ 342   1      
+ 343   1          IE = 0x00;          //Interrupt Enable
+ 344   1          IP = 0x00;          //Interrupt Priority
+ 345   1          EIE1 = 0x00;        //Extended Interrupt Enable 1
+ 346   1          EIE2 = 0x00;        //Extended Interrupt Enable 2
+ 347   1          EIP1 = 0x00;        //Extended Interrupt Priority 1
+ 348   1          EIP2 = 0x00;        //Extended Interrupt Priority 2
+ 349   1      
+ 350   1              
+ 351   1      
+ 352   1      // other initialization code here...
+ 353   1      
+ 354   1      
+ 355   1      
+ 356   1      }   //End of config
+
+
+MODULE INFORMATION:   STATIC OVERLAYABLE
+   CODE SIZE        =    253    ----
+   CONSTANT SIZE    =   ----    ----
+   XDATA SIZE       =   ----    ----
+   PDATA SIZE       =   ----    ----
+   DATA SIZE        =   ----    ----
+   IDATA SIZE       =   ----    ----
+C51 COMPILER V9.02   INIT                                                                  03/03/2015 16:53:09 PAGE 7   
+
+   BIT SIZE         =   ----    ----
+END OF MODULE INFORMATION.
+
+
+C51 COMPILATION COMPLETE.  0 WARNING(S),  0 ERROR(S)

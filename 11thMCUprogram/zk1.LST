@@ -1,0 +1,1925 @@
+C51 COMPILER V9.02   ZK1                                                                   08/24/2016 13:29:35 PAGE 1   
+
+
+C51 COMPILER V9.02, COMPILATION OF MODULE ZK1
+OBJECT MODULE PLACED IN zk1.OBJ
+COMPILER INVOKED BY: C:\Keil\C51\BIN\C51.exe zk1.c DB OE INCDIR(C:\SiLabs\MCU\Inc)
+
+line level    source
+
+   1          ///////////////mian()////////////////////////
+   2          ////////simple ad/da translation function////
+   3          /////////////////////////////////////////////
+   4          #include<stdio.h>
+   5          #include<math.h>
+   6          #include<stdlib.h>
+   7          #include "init.h"
+   8          
+   9          //
+  10          typedef unsigned char uchar; 
+  11          typedef unsigned int  uint;
+  12          typedef unsigned long ulong;
+  13          
+  14          //18B20 
+  15          #define  DataPort_Set1  (P4|=0x01)
+  16          #define  DataPort_Set0  (P4&=0xFE)
+  17          #define  DataPort_Status (P4&0x01)
+  18          
+  19          //ADDR Setting
+  20          #define A0  (P5&0x01)  //P5¿ÚÎª²¦Âë¿ª¹Ø
+  21          #define A1  (P5&0x02)
+  22          #define A2  (P5&0x04)
+  23          #define A3  (P5&0x08)
+  24          #define baud_mode (P5&0xf0)  //¹¤×÷Ä£Ê½
+  25          
+  26          #define ENQ 0x05  //Ñ¯ÎÊ
+  27          #define ACK 0x06  //È·ÈÏ
+  28          #define NAK 0x15  //·ñÈÏ
+  29          #define EOT 0x04  //·¢ËÍ½áÊø
+  30          #define ETX 0x03  //Ó¦´ð½áÊø
+  31          #define DB  0x01  //×Ö½Ú
+  32          #define DW  0x02  //×Ö
+  33          #define DF  0x03  //¸¡µã
+  34          #define BufMax 30 //¶ÁÊý¾Ý¸öÊý
+  35          #define time0  -100000
+  36          
+  37          #define P1_ADDR         0  //P1¿Ú×éÌ¬ÍõµÄµØÖ·
+  38          #define P2_ADDR         2  //P2¿Ú¶ÔÓ¦µÄ×éÌ¬ÍõµÄµØÖ·
+  39          #define DA0_ADDR        20 //DA0¶ÔÓ¦µÄ×éÌ¬ÍõµÄµØÖ·
+  40          #define DA1_ADDR        22
+  41          #define AD_ADDR         4  //AD¿Ú¶ÔÓ¦µÄ×éÌ¬ÍõÖÐµÄµØÖ·
+  42          #define LIGHT_ADDR      24 //DI¿Ú¶ÔÓ¦µÄ×éÌ¬ÍõÖÐµÄµØÖ·
+  43          #define Start 0x40
+  44          #define End 0x0d
+  45          #define Read 0x00
+  46          #define Write 0x01
+  47          #define labStart 0x80
+  48          #define labEnd 0xf0
+  49          ////////////////matlab//////////////////////
+  50          #define BufferLength 32 
+  51          #define matStart 0x46   //f
+  52          #define matEnd1 0x46   //f
+  53          #define matEnd2 0x45   //e
+  54          //#define matRead 0x01
+  55          //#define matWrite 0x02
+C51 COMPILER V9.02   ZK1                                                                   08/24/2016 13:29:35 PAGE 2   
+
+  56          uchar xdata matRbuf[BufferLength]={0}; 
+  57          uchar xdata matTbuf[BufferLength]={0}; 
+  58          uchar matrecok=0;
+  59          uchar matbuf0;
+  60          uchar matbuf1;
+  61          uchar matwei=0;
+  62          ////////////////labview//////////////////////
+  63          uchar xdata labRbuf[BufferLength]={0}; 
+  64          uchar xdata labTbuf[BufferLength]={0};
+  65          uchar labrecok=0;
+  66          uchar labbuf0;
+  67          uchar labwei=0;
+  68          //uchar aaaaa;
+  69          ////////////////////////ASC////////////////////////////////////
+  70          uchar xdata ceshibuf[BufMax];
+  71          uchar xdata recbuf[BufMax];
+  72          uchar xdata sendbuf[BufMax];
+  73          uchar xdata Answer[BufMax];
+  74          uchar dat[10]=(1,2,3,4,5,6,7,8);
+  75          bit recok=0;
+  76          bit  Startrec=0;
+  77          uchar count=0;
+  78          uchar flag1=0;
+  79          bit ceshi;
+  80          uchar former1,former2;
+  81          void Write_byte(void);
+  82          bit check_CRC(void);
+  83          void Read_byte(void);
+  84          void write_inform(uchar dat);
+  85          uchar Dat_trans(uchar hight_v,uchar low_v);
+  86          uchar read_write_flag(void);
+  87          uchar HEXASC_high(uchar tempv);
+  88          uchar HEXASC_low(uchar tempv);
+  89          uchar MyAddr1,MyAddr2;
+  90          uchar matjishu;
+  91          //////////////////////////////modbus///////////////////////////////////////
+  92          uchar xdata modRbuf[BufMax];
+  93          uchar xdata modTbuf[BufMax];
+  94          uchar modrecok=0;
+  95          uchar modwei=0;
+  96          uchar matrecflag=0;
+  97          uchar timeoutcnt=0;
+  98          ////////////////////////////////////////////////////////////
+  99          uchar RecvOk,CRCok;   //±êÖ¾Î»
+ 100          
+ 101          uchar Rptr,Tptr,Tnum;
+ 102          uchar MyAddr=0x00,DelayMs,last,ReadMe;
+ 103          uchar  xdata Rbuf[BufMax],Tbuf[BufMax];
+ 104          
+ 105          uchar WorkMode;   
+ 106          
+ 107          uchar flag=0;    //¶à»úÊ¶±ð±êÖ¾Î»
+ 108          
+ 109          
+ 110          uchar TH,TL;
+ 111          
+ 112          uchar rd_data[8];     //Êý×érd_data[8]ÖÐ´æ·Å´ÓDS18B20ÖÐ¶Á³öµÄÊý¾Ý
+ 113          //................//
+ 114          
+ 115          
+ 116          sfr16   ADC0VAL=0xbe;
+ 117          
+C51 COMPILER V9.02   ZK1                                                                   08/24/2016 13:29:35 PAGE 3   
+
+ 118          
+ 119          //Initialization function for device
+ 120          //void Init_Device(void);  
+ 121          
+ 122          //ADC0×ª»»Æô¶¯
+ 123          void ADC_Start(uchar source); 
+ 124          
+ 125          //UARTÍ¨Ñ¶·¢ËÍ
+ 126          void UART_Send(uchar sdata);
+ 127          
+ 128          //18B20 ·µ»Ø0-ÓÐÉè±¸Á¬½Ó1-ÎÞÉè±¸Á¬½Ó
+ 129          bit RstDS1820(void);
+ 130          
+ 131          //18B20 ¶Á18B20Êý¾Ý
+ 132          unsigned char ReadDS1820(void); 
+ 133          
+ 134          //18B20 Ð´18B20ÃüÁî
+ 135          void WriteDS1820(unsigned char ch);
+ 136          
+ 137          //18B20 Ö÷»ú·¢Ìø¹ý¶ÁÐòÁÐºÅµÄ²Ù×÷ÃüÁî:0xcc
+ 138          void SkipROMCode(void);
+ 139          
+ 140          //18B20 ³õÊ¼»¯
+ 141          void Init18b20(void);
+ 142          
+ 143          //18B20 Æô¶¯18B20×ª»»
+ 144          void StartDS(void);
+ 145          
+ 146          //18B20 ¶ÁÈ¡ÎÂ¶ÈÖµµÄ³ÌÐò
+ 147          unsigned int GetTempValue(void);
+ 148          
+ 149          //¶ÁÈ¡²¦ÂëµØÖ·
+ 150          void GetAddr(void);
+ 151          
+ 152          //¶ÁÈ¡²¨ÌØÂÊÉèÖÃ²¦Âë
+ 153          void SetBaud(void);
+ 154          
+ 155          void CheckCRC();
+ 156          
+ 157          //UARTÍ¨Ñ¶·¢ËÍÊý¾Ý°ü
+ 158          void UART0_SendBuf(uchar* buf, uchar len);
+ 159          
+ 160          void time1();    
+ 161          uint crc16(uchar*str,uint num);/////////////////crc16
+ 162          uint erheyi(uchar high,uchar low);///////¸ßÎ»ºÍµÍÎ»ºÏ³É
+ 163          
+ 164          //18B20 ÓÐ¹ØÑÓÊ±
+ 165          void Delay1us(unsigned char us);
+ 166          
+ 167          void Delay15us(void);
+ 168          
+ 169          void Delay10us(void);
+ 170          
+ 171          void sleep_ms(unsigned int count);      //ÑÓÊ±
+ 172          
+ 173          
+ 174          
+ 175                  
+ 176          
+ 177          //main()
+ 178          void main()
+ 179          {
+C51 COMPILER V9.02   ZK1                                                                   08/24/2016 13:29:35 PAGE 4   
+
+ 180   1          uchar tmpCommand=0;  //0 is default,1 is da ;2 is ad
+ 181   1              uchar tmpAddr = 0x00;
+ 182   1              uchar value1,value2;
+ 183   1          uchar P1_Status,P2_Status,P6_Status;
+ 184   1              uchar temp,ctmp1,ctmp2,xordat,send_temp,send_temp1,send_temp2;/////////tian
+ 185   1              uchar x,tempw,tempw1,tempw2,dizhiw,read_write,dizhir,ko;//////tian
+ 186   1      //      uint v1,v2,v3,v;
+ 187   1              uint w,crct,crcr;
+ 188   1              
+ 189   1      //      uchar kan1,kan2,kan3,kan4;
+ 190   1      //      uint zhuan;
+ 191   1              uchar n,i,*p,crc,k,num;
+ 192   1              uint ptr;
+ 193   1              Tptr=0; Tnum=0;  Rptr=0; 
+ 194   1              ReadMe=0;       RecvOk=0; MyAddr=0;
+ 195   1              
+ 196   1              matrecok=0;///////////
+ 197   1              labrecok=0;
+ 198   1              modrecok=0;
+ 199   1          //////////////////////////////////////////////////////
+ 200   1              ceshibuf[0]=0x00;
+ 201   1              ceshibuf[1]=0x03;
+ 202   1              ceshibuf[2]=0x00;
+ 203   1              ceshibuf[3]=0x00;
+ 204   1              ceshibuf[4]=0x00;
+ 205   1              ceshibuf[5]=0x01;
+ 206   1      
+ 207   1              crct=crc16(ceshibuf,6);
+ 208   1              config();
+ 209   1      
+ 210   1              GetAddr();
+ 211   1      
+ 212   1              SetBaud();
+ 213   1      
+ 214   1              if(baud_mode==0x80) //0001 VB
+ 215   1              {
+ 216   2                      EA=0;
+ 217   2                      ES0=0; 
+ 218   2                      SCON0 = 0x50;   //ÎÞÐ£Ñé
+ 219   2                      WorkMode = 1;//115200,vb 
+ 220   2                      Init18b20();//³õÊ¼»¯18b20
+ 221   2              w = GetTempValue();            //¶Á³öÎÂ¶ÈÖµµÄÔ­Ê¼Êý¾Ý´æÈëW
+ 222   2              }
+ 223   1              else if(baud_mode==0x00) //0000 ×éÌ¬Íõhex
+ 224   1              {
+ 225   2                      EA=1;
+ 226   2                      ES0=1; 
+ 227   2                      SCON0 = 0xD0; //ÓÐÐ£Ñé
+ 228   2                      Init18b20();//³õÊ¼»¯18b20
+ 229   2                      WorkMode = 0;//9600,×éÌ¬Íõ
+ 230   2              }
+ 231   1              else if(baud_mode==0x40)   //0010 ×éÌ¬ÍõASC
+ 232   1              {       
+ 233   2                      EA=1;
+ 234   2                      ES0=1;
+ 235   2                      SCON0=0xD0;//ÓÐÐ£Ñé
+ 236   2              
+ 237   2                      Init18b20();//³õÊ¼»¯18b20
+ 238   2              //      SM2=1;
+ 239   2                      WorkMode = 2;//9600,×éÌ¬ÍõASC
+ 240   2              }
+ 241   1              else if(baud_mode==0xc0) //0011 MATLAB
+C51 COMPILER V9.02   ZK1                                                                   08/24/2016 13:29:35 PAGE 5   
+
+ 242   1              {
+ 243   2                      EA=1;
+ 244   2                      ES0=1;
+ 245   2                      SCON0=0x50;//ÎÞÐ£Ñé
+ 246   2              
+ 247   2                      Init18b20();//³õÊ¼»¯18b20
+ 248   2                      WorkMode = 3;
+ 249   2      
+ 250   2                      //////////////////////////////
+ 251   2                      TMOD=0x10;//¶¨Ê±Æ÷1 16Î»    4ms
+ 252   2                      TH1=0xf0;//9600²¨ÌØÂÊÏÂ3.5¸ö×Ö½ÚµÄÊ±¼ä´óÔ¼Îª3.6MS£¬ÎÒÔÚÕâÀïÉèÖÃÎª4ms
+ 253   2                      TL1=0x5f;
+ 254   2              //      TL0=TH0=0xFF;
+ 255   2                      ET1=1;
+ 256   2              //      TR1=1;
+ 257   2                      PS=1; //ÖÐ¶ÏÓÅÏÈ
+ 258   2              }
+ 259   1              else if(baud_mode==0x20) //0100 LABVIEW
+ 260   1              {
+ 261   2                      EA=1;
+ 262   2                      ES0=1;
+ 263   2                      SCON0=0x50;//ÎÞÐ£Ñé
+ 264   2              
+ 265   2                      Init18b20();//³õÊ¼»¯18b20
+ 266   2                      WorkMode = 4;
+ 267   2              }
+ 268   1              else if(baud_mode==0xa0) //0101 ÑÐ»ªmodbus
+ 269   1              {
+ 270   2                      EA=1;
+ 271   2                      ES0=1;
+ 272   2                      SCON0=0x50;//ÎÞÐ£Ñé
+ 273   2              
+ 274   2                      Init18b20();//³õÊ¼»¯18b20
+ 275   2                      WorkMode = 5;
+ 276   2                      
+ 277   2                      TMOD=0x10;//¶¨Ê±Æ÷1 16Î»    4ms
+ 278   2                      TH1=0xf0;//9600²¨ÌØÂÊÏÂ3.5¸ö×Ö½ÚµÄÊ±¼ä´óÔ¼Îª3.6MS£¬ÎÒÔÚÕâÀïÉèÖÃÎª4ms
+ 279   2                      TL1=0x5f;
+ 280   2              //      TL0=TH0=0xFF;
+ 281   2                      ET1=1;
+ 282   2              //      TR1=1;
+ 283   2                      PS=1; //ÖÐ¶ÏÓÅÏÈ
+ 284   2              }
+ 285   1              else if(baud_mode==0xf0) //1111 VBÀÏ×Ô¿Ø
+ 286   1              {
+ 287   2                      EA=0;
+ 288   2                      ES0=0; 
+ 289   2                      SCON0 = 0x50;   //ÎÞÐ£Ñé
+ 290   2                      WorkMode = 6;//115200,vb 
+ 291   2                      Init18b20();//³õÊ¼»¯18b20
+ 292   2              w = GetTempValue();            //¶Á³öÎÂ¶ÈÖµµÄÔ­Ê¼Êý¾Ý´æÈëW
+ 293   2              }
+ 294   1              else if(baud_mode==0x70) //1110  matlab simulink
+ 295   1              {
+ 296   2                      EA=0;
+ 297   2                      ES0=0; 
+ 298   2                      SCON0 = 0x50;   //ÎÞÐ£Ñé
+ 299   2                      WorkMode = 7;//115200,matlab simulink
+ 300   2              //      Init18b20();//³õÊ¼»¯18b20
+ 301   2          //  w = GetTempValue();            //¶Á³öÎÂ¶ÈÖµµÄÔ­Ê¼Êý¾Ý´æÈëW
+ 302   2              }
+ 303   1              else if(baud_mode==0x60) //0110 Modbus RTU£¨DAAD£©
+C51 COMPILER V9.02   ZK1                                                                   08/24/2016 13:29:35 PAGE 6   
+
+ 304   1              {
+ 305   2                      EA=1;
+ 306   2                      ES0=1;
+ 307   2                      SCON0=0x50;//ÎÞÐ£Ñé
+ 308   2              
+ 309   2                      Init18b20();//³õÊ¼»¯18b20
+ 310   2                      WorkMode = 8;
+ 311   2                      
+ 312   2                      TMOD=0x10;//¶¨Ê±Æ÷1 16Î»    4ms
+ 313   2                      TH1=0xf0;//9600²¨ÌØÂÊÏÂ3.5¸ö×Ö½ÚµÄÊ±¼ä´óÔ¼Îª3.6MS£¬ÎÒÔÚÕâÀïÉèÖÃÎª4ms
+ 314   2                      TL1=0x5f;
+ 315   2              //      TL0=TH0=0xFF;
+ 316   2                      ET1=1;
+ 317   2              //      TR1=1;
+ 318   2                      PS=1; //ÖÐ¶ÏÓÅÏÈ
+ 319   2              }
+ 320   1              /////////////////////////////////////////////////
+ 321   1      //    Init_Device();         //initialization device
+ 322   1              DAC0L=0x00;
+ 323   1              DAC0H=0x08;          //³õÊ¼»¯daÊä³öÖµ
+ 324   1              DAC1L=0x00;
+ 325   1              DAC1H=0x08;          //³õÊ¼»¯daÊä³öÖµ
+ 326   1              P6 = 0xFF;
+ 327   1              //SCON0 = SCON0 | 0x20;
+ 328   1      
+ 329   1      
+ 330   1      
+ 331   1              
+ 332   1              /***************************   VB   *************************************/
+ 333   1              while(WorkMode==1)  //VBÄ£Ê½
+ 334   1              {
+ 335   2                      while(RI0==0) {}
+ 336   2                      RI0=0;
+ 337   2                      tmpAddr=SBUF0; //½ÓÊÕÃüÁîµØÖ·
+ 338   2                      if(tmpAddr == MyAddr)
+ 339   2                      {
+ 340   3                           while(RI0==0){}
+ 341   3                               RI0=0;
+ 342   3                               tmpCommand=SBUF0; //½ÓÊÕÃüÁî×Ö
+ 343   3                               if(0<=tmpCommand)
+ 344   3                               {
+ 345   4                                   while(RI0==0){}
+ 346   4                                       RI0=0;
+ 347   4                                       value1=SBUF0;
+ 348   4                                       while(RI0==0){}
+ 349   4                                       RI0=0;
+ 350   4                                       value2=SBUF0;
+ 351   4                                       if(tmpCommand==0)              //da×ª»» 0Í¨µÀ
+ 352   4                                       {
+ 353   5                                           DAC0L=value2;              //µÍÎ»
+ 354   5                                               DAC0H=value1;      //¸ßÎ»
+ 355   5                           UART_Send(0x55);
+ 356   5                                               UART_Send(0x55);
+ 357   5                                       }
+ 358   4                                       else if(tmpCommand==1)  //da×ª»» 1Í¨µÀ
+ 359   4                                       {
+ 360   5                                           DAC1L=value2;              //µÍÎ»
+ 361   5                                               DAC1H=value1;          //¸ßÎ»
+ 362   5                                               UART_Send(0x55);
+ 363   5                                               UART_Send(0x55);
+ 364   5                                       }
+ 365   4                                       else if(tmpCommand==2)  //ad×ª»»                
+C51 COMPILER V9.02   ZK1                                                                   08/24/2016 13:29:35 PAGE 7   
+
+ 366   4                                       {
+ 367   5                                           ADC_Start(value2);
+ 368   5                                              // v1=ADC0VAL;
+ 369   5                                          //ADC_Start(value2);
+ 370   5                                               //v2=ADC0VAL;
+ 371   5                                           //ADC_Start(value2);
+ 372   5                                              // v3=ADC0VAL;
+ 373   5                                              // v=(v1+v2+v3)/3;
+ 374   5                                               UART_Send(ADC0H);
+ 375   5                                               UART_Send(ADC0L);
+ 376   5                                       }
+ 377   4                                       else if(tmpCommand==3)  //DO
+ 378   4                                       {
+ 379   5                                              P6 = value2;
+ 380   5                                              UART_Send(0x55);
+ 381   5                                              UART_Send(0x55);
+ 382   5                                       }
+ 383   4                                       else if(tmpCommand==4)  //DI P1¿ÚÊý×ÖÁ¿ÊäÈë
+ 384   4                                       {
+ 385   5                                              P1_Status = P1;
+ 386   5                          UART_Send(0);
+ 387   5                                              UART_Send(P1_Status);
+ 388   5                                       }
+ 389   4                                       else if(tmpCommand==5)  //DI P2¿ÚÊý×ÖÁ¿ÊäÈë
+ 390   4                                       {
+ 391   5                                              P2_Status = P2;
+ 392   5                          UART_Send(0);
+ 393   5                                              UART_Send(P2_Status);
+ 394   5                                       }
+ 395   4                                       else if(tmpCommand==6)  //DI P6¿ÚÊý×ÖÁ¿ÊäÈë
+ 396   4                                       {
+ 397   5                                              P6_Status = P6;
+ 398   5                          UART_Send(0);
+ 399   5                                              UART_Send(P6_Status);
+ 400   5                                       }
+ 401   4                                       else if(tmpCommand==0x30)  //¶ÁÈ¡18B20µÄÊý¾Ý
+ 402   4                                       {
+ 403   5                                              w = GetTempValue();            //¶Á³öÎÂ¶ÈÖµµÄÔ­Ê¼Êý¾Ý´æÈëW
+ 404   5                                              UART_Send(TH);
+ 405   5                                              UART_Send(TL);
+ 406   5                                       }
+ 407   4                                       else if(tmpCommand==0x40)  //TFTÏÔÊ¾Ë¢ÆÁ
+ 408   4                                       {
+ 409   5                                              UART_Send(0x55);
+ 410   5                                              UART_Send(0x55);
+ 411   5                                       }
+ 412   4                                       else if(tmpCommand==0xFF)       //½Úµã²âÊÔ
+ 413   4                                       {
+ 414   5                                              if(value1==0xFF && value2==0xFF)
+ 415   5                                              {
+ 416   6                                                      UART_Send(0xAA);
+ 417   6                                                      UART_Send(0xAA);
+ 418   6                                              }
+ 419   5                                      
+ 420   5                                       }
+ 421   4                                       
+ 422   4                               }
+ 423   3                       }
+ 424   2                       else
+ 425   2                       {
+ 426   3                              while(RI0==0){}
+ 427   3                               RI0=0;
+C51 COMPILER V9.02   ZK1                                                                   08/24/2016 13:29:35 PAGE 8   
+
+ 428   3                               tmpCommand=SBUF0; 
+ 429   3                               while(RI0==0){}
+ 430   3                               RI0=0;
+ 431   3                               value1=SBUF0;
+ 432   3                               while(RI0==0){}
+ 433   3                               RI0=0;
+ 434   3                               value2=SBUF0;
+ 435   3                       }
+ 436   2              }
+ 437   1              /*************************** HEX ×éÌ¬Íõ *************************************/
+ 438   1              while(WorkMode==0) //×éÌ¬ÍõÄ£Ê½  hex
+ 439   1              {
+ 440   2                      if(RecvOk)
+ 441   2                      {       
+ 442   3                              RecvOk=0;
+ 443   3                      //      SCON0 = SCON0 | 0x20;
+ 444   3                              CheckCRC();
+ 445   3                              if(Rbuf[0]==MyAddr && CRCok==1)  //¶ÔPCµÄ²éÑ¯ÃüÁî½øÐÐÓ¦´ð
+ 446   3                              {
+ 447   4                              Tbuf[0]=ACK; Tbuf[1]=MyAddr; Tbuf[2]=ETX; 
+ 448   4                              crc=0;  
+ 449   4                                      for(i=0;i<3;i++) crc^=Tbuf[i];
+ 450   4                                      Tbuf[3]=crc; 
+ 451   4                                      Tptr=0; Tnum=4;
+ 452   4                                      UART0_SendBuf(Tbuf, Tnum);
+ 453   4                                      //DelayMs=10; ReadMe=1; 
+ 454   4                              }
+ 455   3                              else if(CRCok==1 && flag==1)     //ÔÚÓ¦´ðºó½øÐÐÊý¾Ý´«ËÍ¿ØÖÆ
+ 456   3                              {                                                               //µ±ÊÇ¶Á»òÐ´Ö¡Ê±£¬¾ÍÒªÅÐ¶ÏÒ»ÏÂÉÏÒ»Ö¡ÖÐµÄÉè±¸µØÖ·ÊÇ·ñÊÇ×Ô¼ºµÄÉè±¸£¬Èç¹ûÊÇÔò·¢Êý¾Ý£¬·ñÔò²»·
+             -¢¡£        
+ 457   4                                      flag=0;
+ 458   4                              ReadMe=2;
+ 459   4                              n=Rbuf[4];
+ 460   4                                      ptr=Rbuf[3]<<8 | Rbuf[2];  
+ 461   4                              if(Rbuf[0]=='R')
+ 462   4                              {
+ 463   5                                      switch(Rbuf[1])
+ 464   5                                      {
+ 465   6                                                      case DB:num=n; 
+ 466   6                       
+ 467   6                                                              Tbuf[3] = ~P1;
+ 468   6                                                              Tbuf[4] = ~P2;
+ 469   6                                                              if(Rbuf[2]==0)
+ 470   6                                                              {Tbuf[3] = ~P6;}
+ 471   6                                                      break;
+ 472   6                                                      case DW:num=n/2;        
+ 473   6                                                      for(i=0;i<num;i++)
+ 474   6                                                              {
+ 475   7                                                              k=i*4;   //6.55ºÍ6.53µÄÇø±ð
+ 476   7                                                                      ADC_Start(i);
+ 477   7                                                              Tbuf[3+k]=ADC0L;
+ 478   7                                                              Tbuf[4+k]=ADC0H;
+ 479   7                                                              }
+ 480   6                                                              if(Rbuf[2]==30)//Èç¹ûÊÇÎÂ¶ÈÊý¾ÝÇëÇó£¬ÔòÖ´ÐÐÕâÌõÓï¾ä
+ 481   6                                  {
+ 482   7                                                      w = GetTempValue();            //¶Á³öÎÂ¶ÈÖµµÄÔ­Ê¼Êý¾Ý´æÈëW
+ 483   7                                                                      //Tbuf[3]=0x6F;
+ 484   7                                                                      //Tbuf[4]=0xFE;
+ 485   7                                                                      Tbuf[3]=TL;
+ 486   7                                                                      Tbuf[4]=TH;                                                             
+ 487   7                                                                      Tbuf[5]=0;
+ 488   7                                                                      Tbuf[6]=0;
+C51 COMPILER V9.02   ZK1                                                                   08/24/2016 13:29:35 PAGE 9   
+
+ 489   7                                                              }
+ 490   6                                                      break;
+ 491   6                                                      case DF:num=n/4; 
+ 492   6                                                      
+ 493   6                                                      for(i=0;i<num;i++)
+ 494   6                                                              {
+ 495   7                                                              k=4*i;
+ 496   7                                                              Tbuf[6+k]=p[k];
+ 497   7                                                              Tbuf[5+k]=p[k+1];
+ 498   7                                                              Tbuf[4+k]=p[k+2];
+ 499   7                                                              Tbuf[3+k]=p[k+3];
+ 500   7                                                              }
+ 501   6                                                      break;
+ 502   6                                              }
+ 503   5                                      Tbuf[0]=ACK; Tbuf[1]=n&0xff; Tbuf[2]=n>>8; 
+ 504   5                                              Tbuf[3+n]=ETX; 
+ 505   5                              crc=0;  
+ 506   5                                              for(i=0;i<4+n;i++) crc^=Tbuf[i];
+ 507   5                                              Tbuf[4+n]=crc;
+ 508   5                                              Tptr=0; Tnum=n+5; 
+ 509   5                                              UART0_SendBuf(Tbuf, Tnum);
+ 510   5                                      }
+ 511   4                                      else if(Rbuf[0]=='W')
+ 512   4                                      {
+ 513   5                              n=Rptr-6;
+ 514   5                                      switch(Rbuf[1])//ÅÐ¶ÏÒªÐ´µÄÊý¾ÝÀàÐÍ
+ 515   5                                      {
+ 516   6                                                      case DB: 
+ 517   6                                                          //if(Rbuf[2]==1)
+ 518   6                                                      {P6 = (~Rbuf[4]);}
+ 519   6                                                      break;
+ 520   6                                                      case DW:
+ 521   6                                                          if(Rbuf[2]==DA0_ADDR)
+ 522   6                                                      {
+ 523   7                                                                      //zhuan=<<8 | 
+ 524   7                                                                      //zhuan=zhuan*400+6147;
+ 525   7                                                                      DAC0L=Rbuf[4];//zhuan & 0xff;
+ 526   7                                                                      DAC0H=Rbuf[5];//zhuan >> 8;
+ 527   7                                                              }
+ 528   6                                                              if(Rbuf[2]==DA1_ADDR)
+ 529   6                                                      {
+ 530   7                                                                      //zhuan=Rbuf[5]<<8 | Rbuf[4];
+ 531   7                                                                      //zhuan=zhuan*400+6147;                                                         
+ 532   7                                                                      DAC1L=Rbuf[4];//zhuan & 0xff;
+ 533   7                                                                      DAC1H=Rbuf[5];//zhuan >> 8;
+ 534   7                                                              }
+ 535   6      
+ 536   6                                                      break;
+ 537   6                                                      case DF:num=n/4;
+ 538   6                                      
+ 539   6                                                      for(i=0;i<num;i++)
+ 540   6                                                              {       
+ 541   7                                                              k=4*i;
+ 542   7                                                              p[k+3]=Rbuf[k+4];
+ 543   7                                                              p[k+2]=Rbuf[k+5];
+ 544   7                                                              p[k+1]=Rbuf[k+6];
+ 545   7                                                              p[k]=Rbuf[k+7];
+ 546   7                                                              }
+ 547   6                                                      break;
+ 548   6                                              }
+ 549   5                                      Tbuf[0]=ACK; Tbuf[1]=0; Tbuf[2]=ETX; 
+ 550   5                              crc=0;  
+C51 COMPILER V9.02   ZK1                                                                   08/24/2016 13:29:35 PAGE 10  
+
+ 551   5                                              for(i=0;i<3;i++) crc^=Tbuf[i];
+ 552   5                                              Tbuf[3]=crc;
+ 553   5                                              Tptr=0; Tnum=4; 
+ 554   5                                              UART0_SendBuf(Tbuf, Tnum);
+ 555   5                                      }
+ 556   4                              }
+ 557   3                      }
+ 558   2              
+ 559   2              }
+ 560   1              /*************************** ASC ×éÌ¬Íõ *************************************/  
+ 561   1              while(WorkMode==2)   //   ASC ×éÌ¬Íõ
+ 562   1              {
+ 563   2                      
+ 564   2                              if(recok)
+ 565   2                              {
+ 566   3                              
+ 567   3              //                      SM2=0;
+ 568   3                              //      recok=0;
+ 569   3                                      temp= Dat_trans(recbuf[1],recbuf[2]);
+ 570   3                              if(temp==MyAddr)//&&check_CRC()
+ 571   3                                      {       
+ 572   4                              
+ 573   4                                              read_write=read_write_flag()&0x01;
+ 574   4                                      if(read_write==Read) 
+ 575   4                                      {
+ 576   5                                              n=Dat_trans(recbuf[9],recbuf[10]);//È¡×Ö½ÚÊý
+ 577   5                                              x=read_write_flag()&0x0c;    //¶ÁÐ´Êý¾ÝÀàÐÍ×Ö½Ú»ò×Ö·
+ 578   5                                              switch(x)
+ 579   5                                              {
+ 580   6                                                      case 0x00:num=n;
+ 581   6                                                                      if(Dat_trans(recbuf[7],recbuf[8])==0x18) //dizhi
+ 582   6                                                              {
+ 583   7                                                                      send_temp1 = ~P1;
+ 584   7                                                                      sendbuf[5]=HEXASC_high(send_temp1);
+ 585   7                                                                      sendbuf[6]=HEXASC_low(send_temp1);
+ 586   7                                                              }
+ 587   6                                                              if(Dat_trans(recbuf[7],recbuf[8])==0x19)
+ 588   6                                                              {
+ 589   7                                                                      send_temp1 = ~P2;
+ 590   7                                                                      sendbuf[5]=HEXASC_high(send_temp1);
+ 591   7                                                                      sendbuf[6]=HEXASC_low(send_temp1);
+ 592   7                                                              }
+ 593   6      
+ 594   6                                                              if(Dat_trans(recbuf[7],recbuf[8])==0)
+ 595   6                                                              {
+ 596   7                                                                      send_temp1 = ~P6;
+ 597   7                                                                      sendbuf[5]=HEXASC_high(send_temp1);
+ 598   7                                                                      sendbuf[6]=HEXASC_low(send_temp1);
+ 599   7                                                              }
+ 600   6                                                                      break;
+ 601   6                                                      case 0x04:num=n/2;   //×Ö   ÏÂÃæADC0LÓëADC0H¸÷Ò»¸ö×Ö½Ú¾ÍÂú×ãÁË
+ 602   6                                                              //      n=2*n;
+ 603   6                                                                      for(i=0;i<num;i++)
+ 604   6                                                                      {
+ 605   7                                                                        dizhir=Dat_trans(recbuf[7],recbuf[8]);//µØÖ·
+ 606   7                                                                              if(dizhir==0x02) {ko=0;}
+ 607   7                                                                              if(dizhir==0x04) {ko=1;}
+ 608   7                                                                              if(dizhir==0x06) {ko=2;}
+ 609   7                                                                              if(dizhir==0x08) {ko=3;}
+ 610   7                                                                              if(dizhir==0x0a) {ko=4;}
+ 611   7                                                                              if(dizhir==0x0c) {ko=5;}
+ 612   7                                                                              if(dizhir==0x0e) {ko=6;}
+C51 COMPILER V9.02   ZK1                                                                   08/24/2016 13:29:35 PAGE 11  
+
+ 613   7                                                                              if(dizhir==0x10) {ko=7;}
+ 614   7                                                                              k=i*4;
+ 615   7                                                                              ADC_Start(ko);
+ 616   7                                                                              send_temp1=ADC0H;
+ 617   7                                                                      send_temp2=ADC0L;//asc¸ßÎ»ÔÚÇ°µÍÎ»ÔÚºó£¬HEXµÍÎ»ÔÚÇ°£¬¸ßÎ»ÔÚºó
+ 618   7                                                                              sendbuf[5+k]=HEXASC_high(send_temp1);//
+ 619   7                                                                              sendbuf[6+k]=HEXASC_low(send_temp1);
+ 620   7                                                                              sendbuf[7+k]=HEXASC_high(send_temp2);
+ 621   7                                                                              sendbuf[8+k]=HEXASC_low(send_temp2);
+ 622   7                                                              
+ 623   7                                                                      //      kan1=sendbuf[5];
+ 624   7                                                                      }
+ 625   6                                              
+ 626   6                                                                      if(Dat_trans(recbuf[7],recbuf[8])==0x1e)//Èç¹ûÊÇÎÂ¶ÈÊý¾ÝÇëÇó£¬ÔòÖ´ÐÐÕâÌõÓï¾ä,30µÄÊ®Áù½øÖÆÎª0x1e
+ 627   6                                      {
+ 628   7                                                                      for(i=0;i<num;i++)
+ 629   7                                                                      {
+ 630   8                                                                              k=i*4;
+ 631   8                                                              w = GetTempValue();            //¶Á³öÎÂ¶ÈÖµµÄÔ­Ê¼Êý¾Ý´æÈëW
+ 632   8                                                                              //Tbuf[3]=0x6F;
+ 633   8                                                                              //Tbuf[4]=0xFE;
+ 634   8                                                                              send_temp1=TH;
+ 635   8                                                                      send_temp2=TL;//asc¸ßÎ»ÔÚÇ°µÍÎ»ÔÚºó£¬HEXµÍÎ»ÔÚÇ°£¬¸ßÎ»ÔÚºó
+ 636   8                                                                              sendbuf[5+k]=HEXASC_high(send_temp1);
+ 637   8                                                                              sendbuf[6+k]=HEXASC_low(send_temp1);
+ 638   8                                                                              sendbuf[7+k]=HEXASC_high(send_temp2);
+ 639   8                                                                              sendbuf[8+k]=HEXASC_low(send_temp2);
+ 640   8                                                                      
+ 641   8                                                              
+ 642   8                                                                      }
+ 643   7      
+ 644   7                                                                      }
+ 645   6                                                                      break;
+ 646   6                                                      case 0x08:num=n/4;
+ 647   6                                                                      {
+ 648   7                                                                              for(i=0;i<num;i++)
+ 649   7                                                                      {
+ 650   8                                                                              k=i*8;
+ 651   8                                                                              sendbuf[5+k]=0x00;
+ 652   8                                                                              sendbuf[6+k]=0x00;
+ 653   8                                                                              sendbuf[7+k]=0x00;
+ 654   8                                                                              sendbuf[8+k]=0x00;
+ 655   8                                                                              sendbuf[9+k]=0x00;
+ 656   8                                                                              sendbuf[10+k]=0x00;
+ 657   8                                                                              sendbuf[11+k]=0x00;
+ 658   8                                                                              sendbuf[12+k]=0x00;
+ 659   8                                                                      }
+ 660   7                                                                      }
+ 661   6                                                                      break;
+ 662   6                                              }
+ 663   5                                                      
+ 664   5                                              /***********************¸ø01234¸³Öµ***********************/
+ 665   5                                                      sendbuf[0]=0x40;
+ 666   5                                                      sendbuf[1]=recbuf[1];
+ 667   5                                                      sendbuf[2]=recbuf[2];
+ 668   5                                                      sendbuf[3]=recbuf[9];
+ 669   5                                                      sendbuf[4]=recbuf[10];
+ 670   5                                                      sendbuf[2*n+7]=0x0d;
+ 671   5                                                      
+ 672   5                                                      xordat=0;//ÆæÅ¼Òì»òÎ»£g¹²n+8
+ 673   5                                                      for(i=1;i<(2*n+5);i++)xordat^=sendbuf[i];
+ 674   5                                                      send_temp=xordat;
+C51 COMPILER V9.02   ZK1                                                                   08/24/2016 13:29:35 PAGE 12  
+
+ 675   5                                                      ctmp1=(send_temp>>4)&0x0f;
+ 676   5                                                      if(ctmp1>9)sendbuf[2*n+5]=ctmp1%9+0x40;
+ 677   5                                                      else sendbuf[2*n+5]=ctmp1+0x30;
+ 678   5                                                      ctmp2=send_temp&0x0f;
+ 679   5                                                      if(ctmp2>9)sendbuf[2*n+6]=ctmp2%9+0x40;
+ 680   5                                                      else sendbuf[2*n+6]=ctmp2+0x30;
+ 681   5                                                      
+ 682   5                                      
+ 683   5                                                      UART0_SendBuf(sendbuf,2*n+8);
+ 684   5                                      
+ 685   5                                                      
+ 686   5                                      }
+ 687   4                      else
+ 688   4                                      {                     //Ð´
+ 689   5                                              n=Dat_trans(recbuf[9],recbuf[10]);//È¡×Ö½ÚÊý
+ 690   5                                              x=read_write_flag()&0x0c;    //¶ÁÐ´Êý¾ÝÀàÐÍ×Ö½Ú»ò×Ö·
+ 691   5                                      switch(x)
+ 692   5                                              {
+ 693   6                                              case 0x00:num=n;         //×Ö½Ú
+ 694   6                                                      tempw=Dat_trans(recbuf[11],recbuf[12]);
+ 695   6                                                      P6 = (~tempw);
+ 696   6                                              break;
+ 697   6                                              case 0x04:num=n/2;                                                                      //×Ö£¬Ã»ÓÐ·ÖÎ»£¬¾ÍÊÇÁ½¸ö×Ö½Ú
+ 698   6                                                      dizhiw=Dat_trans(recbuf[7],recbuf[8]);
+ 699   6                                                      tempw1=Dat_trans(recbuf[11],recbuf[12]);
+ 700   6                                                      tempw2=Dat_trans(recbuf[13],recbuf[14]);
+ 701   6                                                              if(dizhiw==0x14) //DA0_ADDRÒòÎª==20²»ÄÜ¼ì²â³öÀ´£¬20µÄÊ®Áù½øÖÆÎªËùÒÔ¸ÄÎª0x14£¬ÆäÊµÊÇDA0_ADDR
+ 702   6                                                              {
+ 703   7                                                                      
+ 704   7                                                                      DAC0H=tempw1;//asc¸ßÎ»ÔÚÇ°µÍÎ»ÔÚºó£¬HEXµÍÎ»ÔÚÇ°£¬¸ßÎ»ÔÚºó
+ 705   7                                                                      DAC0L=tempw2;
+ 706   7                                                                      DAC0H=tempw1;//51bug,±ØÐë¸øDA¸³ÖµÁ½´Î£¬Ò»´Î²»¾«×¼
+ 707   7                                                                      DAC0L=tempw2;//tempw2;
+ 708   7                                                                                                      
+ 709   7                                                              }
+ 710   6                                                              else if(dizhiw==0x16) //DA1_ADDRÍ¬ÉÏ
+ 711   6                                                      {
+ 712   7                                                                      DAC1H=tempw1;//tempw1;
+ 713   7                                                                      DAC1L=tempw2;//tempw2;
+ 714   7                                                                      DAC1H=tempw1;//51bug,±ØÐë¸øDA¸³ÖµÁ½´Î£¬Ò»´Î²»¾«×¼
+ 715   7                                                                      DAC1L=tempw2;//tempw2;
+ 716   7                                                                      
+ 717   7                                                              }  //else if
+ 718   6                                                       break;
+ 719   6                                                }//swi
+ 720   5                                              write_inform('#');
+ 721   5                                                             //Write_byte();          //break;
+ 722   5                                      }//else
+ 723   4                               }
+ 724   3                               
+ 725   3                              else  write_inform('*' );
+ 726   3      //                               SM2=1;
+ 727   3                              recok=0;
+ 728   3                              }
+ 729   2              
+ 730   2                      }
+ 731   1              /************************matlab********************************/
+ 732   1                      while(WorkMode==3) 
+ 733   1                      {
+ 734   2                      
+ 735   2                              if(matrecok==1)
+ 736   2                              {
+C51 COMPILER V9.02   ZK1                                                                   08/24/2016 13:29:35 PAGE 13  
+
+ 737   3                              
+ 738   3              //                      SM2=0;
+ 739   3                              //      recok=0;
+ 740   3                                      temp= Dat_trans(matRbuf[1],matRbuf[2]);
+ 741   3                              if(temp==MyAddr)//&&check_CRC()
+ 742   3                                      {       
+ 743   4                              
+ 744   4                                              read_write=Dat_trans(matRbuf[3],matRbuf[4]);  //¶ÁÐ´±êÖ¾Î»
+ 745   4                                      if(read_write==Read)   //00
+ 746   4                                      {
+ 747   5                                              n=Dat_trans(matRbuf[9],matRbuf[10]);//È¡×Ö½ÚÊý
+ 748   5                                              x=Dat_trans(matRbuf[5],matRbuf[6]);    //¶ÁÐ´Êý¾ÝÀàÐÍ×Ö½Ú»ò×Ö·
+ 749   5                                              switch(x)
+ 750   5                                              {
+ 751   6                                                      case 0x00:num=n;
+ 752   6                                                                      if(Dat_trans(matRbuf[7],matRbuf[8])==0x18) //dizhi
+ 753   6                                                              {
+ 754   7                                                                      send_temp1 = ~P1;
+ 755   7                                                                      matTbuf[5]=HEXASC_high(send_temp1);
+ 756   7                                                                      matTbuf[6]=HEXASC_low(send_temp1);
+ 757   7                                                              }
+ 758   6                                                              if(Dat_trans(matRbuf[7],matRbuf[8])==0x19)
+ 759   6                                                              {
+ 760   7                                                                      send_temp1 = ~P2;
+ 761   7                                                                      matTbuf[5]=HEXASC_high(send_temp1);
+ 762   7                                                                      matTbuf[6]=HEXASC_low(send_temp1);
+ 763   7                                                              }
+ 764   6      
+ 765   6                                                              if(Dat_trans(matRbuf[7],matRbuf[8])==0)
+ 766   6                                                              {
+ 767   7                                                                      send_temp1 = ~P6;
+ 768   7                                                                      matTbuf[5]=HEXASC_high(send_temp1);
+ 769   7                                                                      matTbuf[6]=HEXASC_low(send_temp1);
+ 770   7                                                              }
+ 771   6                                                                      break;
+ 772   6                                                      case 0x01:num=n/2;   //×Ö   ÏÂÃæADC0LÓëADC0H¸÷Ò»¸ö×Ö½Ú¾ÍÂú×ãÁË
+ 773   6                                                              //      n=2*n;
+ 774   6                                                                      for(i=0;i<num;i++)
+ 775   6                                                                      {
+ 776   7                                                                        dizhir=Dat_trans(matRbuf[7],matRbuf[8]);//µØÖ·
+ 777   7                                                                              if(dizhir==0x02) {ko=0;}
+ 778   7                                                                              if(dizhir==0x04) {ko=1;}
+ 779   7                                                                              if(dizhir==0x06) {ko=2;}
+ 780   7                                                                              if(dizhir==0x08) {ko=3;}
+ 781   7                                                                              if(dizhir==0x0a) {ko=4;}
+ 782   7                                                                              if(dizhir==0x0c) {ko=5;}
+ 783   7                                                                              if(dizhir==0x0e) {ko=6;}
+ 784   7                                                                              if(dizhir==0x10) {ko=7;}
+ 785   7                                                                              k=i*4;
+ 786   7                                                                              ADC_Start(ko);
+ 787   7                                                                              send_temp1=ADC0H;
+ 788   7                                                                      send_temp2=ADC0L;//asc¸ßÎ»ÔÚÇ°µÍÎ»ÔÚºó£¬HEXµÍÎ»ÔÚÇ°£¬¸ßÎ»ÔÚºó
+ 789   7                                                                              matTbuf[5+k]=HEXASC_high(send_temp1);//
+ 790   7                                                                              matTbuf[6+k]=HEXASC_low(send_temp1);
+ 791   7                                                                              matTbuf[7+k]=HEXASC_high(send_temp2);
+ 792   7                                                                              matTbuf[8+k]=HEXASC_low(send_temp2);
+ 793   7                                                              
+ 794   7                                                                      //      kan1=sendbuf[5];
+ 795   7                                                                      }
+ 796   6                                              
+ 797   6                                                                      if(Dat_trans(matRbuf[7],matRbuf[8])==0x1e)//Èç¹ûÊÇÎÂ¶ÈÊý¾ÝÇëÇó£¬ÔòÖ´ÐÐÕâÌõÓï¾ä,30µÄÊ®Áù½øÖÆÎª0x1e
+ 798   6                                      {
+C51 COMPILER V9.02   ZK1                                                                   08/24/2016 13:29:35 PAGE 14  
+
+ 799   7                                                                      for(i=0;i<num;i++)
+ 800   7                                                                      {
+ 801   8                                                                              k=i*4;
+ 802   8                                                              w = GetTempValue();            //¶Á³öÎÂ¶ÈÖµµÄÔ­Ê¼Êý¾Ý´æÈëW
+ 803   8                                                                              //Tbuf[3]=0x6F;
+ 804   8                                                                              //Tbuf[4]=0xFE;
+ 805   8                                                                              send_temp1=TH;
+ 806   8                                                                      send_temp2=TL;//asc¸ßÎ»ÔÚÇ°µÍÎ»ÔÚºó£¬HEXµÍÎ»ÔÚÇ°£¬¸ßÎ»ÔÚºó
+ 807   8                                                                              matTbuf[5+k]=HEXASC_high(send_temp1);
+ 808   8                                                                              matTbuf[6+k]=HEXASC_low(send_temp1);
+ 809   8                                                                              matTbuf[7+k]=HEXASC_high(send_temp2);
+ 810   8                                                                              matTbuf[8+k]=HEXASC_low(send_temp2);
+ 811   8                                                                      
+ 812   8                                                              
+ 813   8                                                                      }
+ 814   7      
+ 815   7                                                                      }
+ 816   6                                                                      break;
+ 817   6                                                      case 0x10:num=n/4;
+ 818   6                                                                      {
+ 819   7                                                                              for(i=0;i<num;i++)
+ 820   7                                                                      {
+ 821   8                                                                              k=i*8;
+ 822   8                                                                              matTbuf[5+k]=0x00;
+ 823   8                                                                              matTbuf[6+k]=0x00;
+ 824   8                                                                              matTbuf[7+k]=0x00;
+ 825   8                                                                              matTbuf[8+k]=0x00;
+ 826   8                                                                              matTbuf[9+k]=0x00;
+ 827   8                                                                              matTbuf[10+k]=0x00;
+ 828   8                                                                              matTbuf[11+k]=0x00;
+ 829   8                                                                              matTbuf[12+k]=0x00;
+ 830   8                                                                      }
+ 831   7                                                                      }
+ 832   6                                                                      break;
+ 833   6                                              }
+ 834   5                                                      
+ 835   5                                              /***********************¸ø01234¸³Öµ***********************/
+ 836   5                                                      matTbuf[0]=0x46;
+ 837   5                                                      matTbuf[1]=matRbuf[1];
+ 838   5                                                      matTbuf[2]=matRbuf[2];
+ 839   5                                                      matTbuf[3]=matRbuf[9];
+ 840   5                                                      matTbuf[4]=matRbuf[10];
+ 841   5                                                      matTbuf[2*n+5]=matEnd1;
+ 842   5                                                      matTbuf[2*n+6]=matEnd2;
+ 843   5                                                      
+ 844   5                                                      
+ 845   5                                                      
+ 846   5                                      
+ 847   5                                              //      UART0_SendBuf(matTbuf,2*n+7);
+ 848   5                                                      UART0_SendBuf(matTbuf,13);
+ 849   5                                      
+ 850   5                                                      
+ 851   5                                      }
+ 852   4                      else
+ 853   4                                      {                     //Ð´
+ 854   5                                              n=Dat_trans(matRbuf[9],matRbuf[10]);   //È¡×Ö½ÚÊý
+ 855   5                                              x=Dat_trans(matRbuf[5],matRbuf[6]);   //¶ÁÐ´Êý¾ÝÀàÐÍ×Ö½Ú»ò×Ö·
+ 856   5                                      switch(x)
+ 857   5                                              {
+ 858   6                                              case 0x00:num=n;         //×Ö½Ú
+ 859   6                                                      tempw=Dat_trans(matRbuf[11],matRbuf[12]);
+ 860   6                                                      P6 = (~tempw);
+C51 COMPILER V9.02   ZK1                                                                   08/24/2016 13:29:35 PAGE 15  
+
+ 861   6                                              break;
+ 862   6                                              case 0x01:num=n/2;                                                                      //×Ö£¬Ã»ÓÐ·ÖÎ»£¬¾ÍÊÇÁ½¸ö×Ö½Ú
+ 863   6                                                      dizhiw=Dat_trans(matRbuf[7],matRbuf[8]);
+ 864   6                                                      tempw1=Dat_trans(matRbuf[11],matRbuf[12]);
+ 865   6                                                      tempw2=Dat_trans(matRbuf[13],matRbuf[14]);
+ 866   6                                                              if(dizhiw==0x14) //DA0_ADDRÒòÎª==20²»ÄÜ¼ì²â³öÀ´£¬20µÄÊ®Áù½øÖÆÎªËùÒÔ¸ÄÎª0x14£¬ÆäÊµÊÇDA0_ADDR
+ 867   6                                                              {
+ 868   7                                                                      
+ 869   7                                                                      DAC0H=tempw1;//asc¸ßÎ»ÔÚÇ°µÍÎ»ÔÚºó£¬HEXµÍÎ»ÔÚÇ°£¬¸ßÎ»ÔÚºó
+ 870   7                                                                      DAC0L=tempw2;
+ 871   7                                                                      DAC0H=tempw1;//51bug,±ØÐë¸øDA¸³ÖµÁ½´Î£¬Ò»´Î²»¾«×¼
+ 872   7                                                                      DAC0L=tempw2;//tempw2;
+ 873   7                                                                                                      
+ 874   7                                                              }
+ 875   6                                                              else if(dizhiw==0x16) //DA1_ADDRÍ¬ÉÏ
+ 876   6                                                      {
+ 877   7                                                                      DAC1H=tempw1;//tempw1;
+ 878   7                                                                      DAC1L=tempw2;//tempw2;
+ 879   7                                                                      DAC1H=tempw1;//51bug,±ØÐë¸øDA¸³ÖµÁ½´Î£¬Ò»´Î²»¾«×¼
+ 880   7                                                                      DAC1L=tempw2;//tempw2;
+ 881   7                                                                      
+ 882   7                                                              }  //else if
+ 883   6                                                       break;
+ 884   6                                                }//swi
+ 885   5                                              //      write_inform('#');
+ 886   5                                                      matTbuf[0]=0x46;
+ 887   5                                                      matTbuf[1]=matRbuf[1];
+ 888   5                                                      matTbuf[2]=matRbuf[2];
+ 889   5                                                      matTbuf[3]=0x00;
+ 890   5                                                      matTbuf[4]=0x01;
+ 891   5                                                      matTbuf[5]=matEnd1;
+ 892   5                                                      matTbuf[6]=matEnd2;
+ 893   5                                                      matTbuf[7]=0x00;
+ 894   5                                                      matTbuf[8]=0x00;
+ 895   5                                                      matTbuf[9]=0x00;
+ 896   5                                                      matTbuf[10]=0x00;
+ 897   5                                                      matTbuf[11]=0x00;
+ 898   5                                                      matTbuf[12]=0x00;
+ 899   5                                              
+ 900   5      
+ 901   5                                                      //UART0_SendBuf(matTbuf,7);
+ 902   5                                                      UART0_SendBuf(matTbuf,13);
+ 903   5                                                            
+ 904   5                                      }//else
+ 905   4                               }
+ 906   3                               
+ 907   3                              else  //write_inform('*' );
+ 908   3                              {
+ 909   4                                  matTbuf[0]=0x46;
+ 910   4                                      matTbuf[1]=matRbuf[1];
+ 911   4                                      matTbuf[2]=matRbuf[2];
+ 912   4                                      matTbuf[3]=0x01;
+ 913   4                                      matTbuf[4]=0x01;
+ 914   4                                      matTbuf[5]=0x00;
+ 915   4                                      matTbuf[6]=0x00;
+ 916   4                                      matTbuf[7]=0x00;
+ 917   4                                      matTbuf[8]=0x00;
+ 918   4                                      matTbuf[9]=0x00;
+ 919   4                                      matTbuf[10]=0x00;
+ 920   4                                      matTbuf[11]=0x00;
+ 921   4                                      matTbuf[12]=0x00;
+ 922   4                                      
+C51 COMPILER V9.02   ZK1                                                                   08/24/2016 13:29:35 PAGE 16  
+
+ 923   4                                      
+ 924   4      
+ 925   4                              //      UART0_SendBuf(matTbuf,7);
+ 926   4                                      UART0_SendBuf(matTbuf,13);
+ 927   4                              }
+ 928   3      
+ 929   3                              matrecok=0;
+ 930   3                              }
+ 931   2                      
+ 932   2                      }
+ 933   1              /************************labview********************************/
+ 934   1                      while(WorkMode==4)
+ 935   1                      {
+ 936   2                              if(labrecok==1)    
+ 937   2                              {       
+ 938   3                                      if(labRbuf[1]==MyAddr) //dizhi
+ 939   3                                      {
+ 940   4                                              if(labRbuf[2]==Read)   //read
+ 941   4                                              {       
+ 942   5                                                      n=labRbuf[5];
+ 943   5                                                      switch(labRbuf[3])
+ 944   5                                                      {
+ 945   6                                                              case 0x00:num=n;
+ 946   6                                                                                //if(labRbuf[4]==0x18)
+ 947   6                                                                               labTbuf[3] = ~P1;
+ 948   6                                                                               labTbuf[4] = ~P2;
+ 949   6                                                                               if(labRbuf[4]==0x00)
+ 950   6                                                                               {labTbuf[3]=~P6;}
+ 951   6                                                                               break;
+ 952   6                                                              case 0x01:num=n/2;
+ 953   6                                                                                for(i=0;i<num;i++)
+ 954   6                                                                                      {
+ 955   7                                                                                              dizhir=labRbuf[4];//µØÖ·
+ 956   7                                                                                              if(dizhir==0x02) {ko=0;}
+ 957   7                                                                                              if(dizhir==0x04) {ko=1;}
+ 958   7                                                                                              if(dizhir==0x06) {ko=2;}
+ 959   7                                                                                              if(dizhir==0x08) {ko=3;}
+ 960   7                                                                                              if(dizhir==0x0a) {ko=4;}
+ 961   7                                                                                              if(dizhir==0x0c) {ko=5;}
+ 962   7                                                                                              if(dizhir==0x0e) {ko=6;}
+ 963   7                                                                                              if(dizhir==0x10) {ko=7;}
+ 964   7                                                                                              k=i*4;
+ 965   7                                                                                              ADC_Start(ko);
+ 966   7                                                                                              labTbuf[3]=ADC0H;
+ 967   7                                                                                      labTbuf[4]=ADC0L;//asc¸ßÎ»ÔÚÇ°µÍÎ»ÔÚºó£¬HEXµÍÎ»ÔÚÇ°£¬¸ßÎ»ÔÚºó
+ 968   7                                                                                              
+ 969   7                                                                                      }
+ 970   6                                                                                      if(labRbuf[4]==0x1e)//Èç¹ûÊÇÎÂ¶ÈÊý¾ÝÇëÇó£¬ÔòÖ´ÐÐÕâÌõÓï¾ä,30µÄÊ®Áù½øÖÆÎª0x1e
+ 971   6                                                      {
+ 972   7                                                                                       for(i=0;i<num;i++)
+ 973   7                                                                                      {
+ 974   8                                                                                              k=i*4;
+ 975   8                                                                              w = GetTempValue();            //¶Á³öÎÂ¶ÈÖµµÄÔ­Ê¼Êý¾Ý´æÈëW
+ 976   8                                                                                              //labTbuf[3]=0xfe;
+ 977   8                                                                              //      labTbuf[4]=0X6f;
+ 978   8                                                                                              labTbuf[3]=TH;
+ 979   8                                                                                      labTbuf[4]=TL;//asc¸ßÎ»ÔÚÇ°µÍÎ»ÔÚºó£¬HEXµÍÎ»ÔÚÇ°£¬¸ßÎ»ÔÚºó
+ 980   8                                                                                      
+ 981   8                                                                                      }
+ 982   7                                              }
+ 983   6                                                                                      break;
+ 984   6                                                                              case 0x10:num=n/4;
+C51 COMPILER V9.02   ZK1                                                                   08/24/2016 13:29:35 PAGE 17  
+
+ 985   6                                                                                      for(i=0;i<num;i++)
+ 986   6                                                                                      {
+ 987   7                                                                                      k=4*i;
+ 988   7                                                                                      labTbuf[6+k]=0;
+ 989   7                                                                                      labTbuf[5+k]=0;
+ 990   7                                                                                      labTbuf[4+k]=0;
+ 991   7                                                                                      labTbuf[3+k]=0;
+ 992   7                                                                                      }
+ 993   6                                                                              break;
+ 994   6                                                      }//switch
+ 995   5                                                              
+ 996   5                                                      labTbuf[0]=labStart;
+ 997   5                                                      labTbuf[1]=labRbuf[1];
+ 998   5                                                      labTbuf[2]=labRbuf[2];
+ 999   5                                                      labTbuf[5]=labEnd;
+1000   5                                                      UART0_SendBuf(labTbuf,6);
+1001   5                                                      labrecok=0;
+1002   5                                              }//read
+1003   4                                      else  //write
+1004   4                                              {
+1005   5                                              switch(labRbuf[3])//ÅÐ¶ÏÒªÐ´µÄÊý¾ÝÀàÐÍ
+1006   5                                              {
+1007   6                                                              case 0x00: 
+1008   6                                                                       //if(labRbuf[4]==0x00)
+1009   6                                                              {P6 = (~labRbuf[6]);}
+1010   6                                                                      break;
+1011   6                                                              case 0x01:
+1012   6                                                              if(labRbuf[4]==0x14)  //DA0
+1013   6                                                              {
+1014   7                                                                      
+1015   7                                                                              DAC0H=labRbuf[6];
+1016   7                                                                              DAC0L=labRbuf[7];
+1017   7                                                                              DAC0H=labRbuf[6];
+1018   7                                                                              DAC0L=labRbuf[7];
+1019   7                                                                      }
+1020   6                                                                      if(labRbuf[4]==0x16)  //da1
+1021   6                                                              {
+1022   7                                                                                                              
+1023   7                                                                              DAC1H=labRbuf[6];
+1024   7                                                                              DAC1L=labRbuf[7];
+1025   7                                                                              DAC1H=labRbuf[6];
+1026   7                                                                              DAC1L=labRbuf[7];
+1027   7                                                                      }
+1028   6      
+1029   6                                                              break;
+1030   6                                                              case 0x10:num=n/4;
+1031   6                                              break;
+1032   6                                                      
+1033   6                                              }//switch               
+1034   5                                              
+1035   5                                      labTbuf[0]=labStart; 
+1036   5                                              labTbuf[1]=labRbuf[1];
+1037   5                      
+1038   5                                              labTbuf[2]=0x00;
+1039   5                                              labTbuf[3]=0x00;
+1040   5                                              labTbuf[4]=0x00;
+1041   5                                              labTbuf[5]=labEnd;
+1042   5                                      
+1043   5                                              UART0_SendBuf(labTbuf,6);
+1044   5                                              labrecok=0;
+1045   5                                              }
+1046   4      
+C51 COMPILER V9.02   ZK1                                                                   08/24/2016 13:29:35 PAGE 18  
+
+1047   4      
+1048   4                                      }//addr
+1049   3                              
+1050   3                              }//rec
+1051   2                      }//4
+1052   1      
+1053   1              /**************************ÑÐ»ªmodbus***********************************/
+1054   1                      while(WorkMode==5)
+1055   1                      {
+1056   2                              if(modrecok==1)
+1057   2                              {
+1058   3                                      if(modRbuf[0]==MyAddr && modRbuf[1]==0x03) //dizhi 
+1059   3                                      {
+1060   4                                              
+1061   4                                              crcr=erheyi(modRbuf[7],modRbuf[6]);/////////////////crc16
+1062   4                                              
+1063   4                                              if(crc16(modRbuf,6)==crcr)
+1064   4                                              {
+1065   5      
+1066   5                                                      if(modRbuf[3]+modRbuf[5]>8 || modRbuf[2]>0 || modRbuf[4]>0)
+1067   5                                                      {
+1068   6                                                              modTbuf[0]=modRbuf[0];
+1069   6                                                              modTbuf[1]=modRbuf[1]|0x80;
+1070   6                                                              modTbuf[2]=0;
+1071   6                                                              crct=crc16(modTbuf,3);//¸öÊýÒª¸Ä
+1072   6                                                              modTbuf[3]=crct&0x00ff;//bufÎ»ÖÃ¸Ä
+1073   6                                                              modTbuf[4]=crct>>8;     
+1074   6                                                              //UART0_SendBuf(modTbuf,5);                                             
+1075   6                                                      }
+1076   5                                                      else
+1077   5                                                      {
+1078   6                                                              for(i=0;i<modRbuf[5];i++)
+1079   6                                                              {
+1080   7                                                                      ADC_Start(modRbuf[3]+i);
+1081   7                                                                      modTbuf[3+i*2]=(ADC0H<<4)+(ADC0L>>4);//12wei >>16wei
+1082   7                                                              modTbuf[4+i*2]=ADC0L<<4;
+1083   7                                                              }
+1084   6                                                              modTbuf[0]=modRbuf[0];
+1085   6                                                              modTbuf[1]=modRbuf[1];
+1086   6                                                              modTbuf[2]=modRbuf[5]*2;
+1087   6                                                              crct=crc16(modTbuf,3+modRbuf[5]*2);//¸öÊýÒª¸Ä
+1088   6                                                              modTbuf[3+modRbuf[5]*2]=crct&0x00ff;//bufÎ»ÖÃ¸Ä
+1089   6                                                              modTbuf[4+modRbuf[5]*2]=crct>>8;
+1090   6                                                              UART0_SendBuf(modTbuf,5+modRbuf[5]*2);//·¢ËÍ¸öÊýÒª¸Ä
+1091   6                                                      }
+1092   5                                              }//crc
+1093   4                                      }//addr
+1094   3                                      modrecok=0;
+1095   3                              }//recok
+1096   2              
+1097   2                      }//5
+1098   1              /************************VBÀÏ×Ô¿Ø*******************************/
+1099   1                      while(WorkMode==6)
+1100   1                      {
+1101   2                       while(RI0==0){}
+1102   2                       RI0=0;
+1103   2                       tmpCommand=SBUF0; //½ÓÊÕÃüÁî×Ö
+1104   2                       if(0<=tmpCommand<3)
+1105   2                       {
+1106   3                           while(RI0==0){}
+1107   3                               RI0=0;
+1108   3                               value1=SBUF0;
+C51 COMPILER V9.02   ZK1                                                                   08/24/2016 13:29:35 PAGE 19  
+
+1109   3                               while(RI0==0){}
+1110   3                               RI0=0;
+1111   3                               value2=SBUF0;
+1112   3                               if(tmpCommand==0)              //da×ª»»
+1113   3                               {
+1114   4                                   DAC0L=value2;              //µÍÎ»
+1115   4                                       DAC0H=value1;          //¸ßÎ»
+1116   4                                       DAC0L=value2;          //µÍÎ»
+1117   4                                       DAC0H=value1;          //¸ßÎ»
+1118   4                               }
+1119   3                               else if(tmpCommand==1)
+1120   3                               {
+1121   4                                   DAC1L=value2;              //µÍÎ»
+1122   4                                       DAC1H=value1;          //¸ßÎ»
+1123   4                                       DAC1L=value2;          //µÍÎ»
+1124   4                                       DAC1H=value1;          //¸ßÎ»
+1125   4                               }
+1126   3                               else                    
+1127   3                               {
+1128   4                                   ADC_Start(value2);
+1129   4                                      // v1=ADC0VAL;
+1130   4                                   ADC_Start(value2);
+1131   4                                       //v2=ADC0VAL;
+1132   4                                   //ADC_Start(value2);
+1133   4                                      // v3=ADC0VAL;
+1134   4                                      // v=(v1+v2+v3)/3;
+1135   4                                       UART_Send(ADC0H);
+1136   4                                       UART_Send(ADC0L);
+1137   4                               }
+1138   3                       }
+1139   2                      }
+1140   1      
+1141   1      
+1142   1              /************************Matlab Simulink*******************************/
+1143   1              while(WorkMode==7)  //Matlab SimulinkÄ£Ê½
+1144   1              {
+1145   2                      while(RI0==0) {}
+1146   2                      RI0=0;
+1147   2                      tmpAddr=SBUF0; //½ÓÊÕÃüÁîµØÖ·
+1148   2                      if(tmpAddr == MyAddr)
+1149   2                      {
+1150   3                           while(RI0==0){}
+1151   3                               RI0=0;
+1152   3                               tmpCommand=SBUF0; //½ÓÊÕÃüÁî×Ö
+1153   3                               if(0<=tmpCommand)
+1154   3                               {
+1155   4                                   while(RI0==0){}
+1156   4                                       RI0=0;
+1157   4                                       value1=SBUF0;
+1158   4                                       while(RI0==0){}
+1159   4                                       RI0=0;
+1160   4                                       value2=SBUF0;
+1161   4                                       if(tmpCommand==0)              //da×ª»» 0Í¨µÀ
+1162   4                                       {
+1163   5                                           DAC0L=value2;              //µÍÎ»
+1164   5                                               DAC0H=value1;      //¸ßÎ»
+1165   5                           UART_Send(0x55);
+1166   5                                               UART_Send(0x55);
+1167   5                                               UART_Send(0x55);
+1168   5                                               UART_Send(0x55);
+1169   5                                       }
+1170   4                                       else if(tmpCommand==1)  //da×ª»» 1Í¨µÀ
+C51 COMPILER V9.02   ZK1                                                                   08/24/2016 13:29:35 PAGE 20  
+
+1171   4                                       {
+1172   5                                           DAC1L=value2;              //µÍÎ»
+1173   5                                               DAC1H=value1;          //¸ßÎ»
+1174   5                                               UART_Send(0x55);
+1175   5                                               UART_Send(0x55);
+1176   5                                               UART_Send(0x55);
+1177   5                                               UART_Send(0x55);   //·¢ËÍ4´Î0x55
+1178   5                                       }
+1179   4                                       else if(tmpCommand==2)  //ad×ª»»                
+1180   4                                       {
+1181   5                                           ADC_Start(value2);
+1182   5                                               UART_Send(tmpAddr);  //·¢ËÍµØÖ·
+1183   5                                               UART_Send(value2);   //·¢ËÍÍ¨µÀºÅ
+1184   5                                               UART_Send(ADC0H);
+1185   5                                               UART_Send(ADC0L);     //·¢ËÍAD×ª»»Êý¾Ý
+1186   5                                       }                               
+1187   4                               }
+1188   3                       }
+1189   2                       else
+1190   2                       {
+1191   3                              while(RI0==0){}
+1192   3                               RI0=0;
+1193   3                               tmpCommand=SBUF0; 
+1194   3                               while(RI0==0){}
+1195   3                               RI0=0;
+1196   3                               value1=SBUF0;
+1197   3                               while(RI0==0){}
+1198   3                               RI0=0;
+1199   3                               value2=SBUF0;
+1200   3                       }
+1201   2              }
+1202   1              /**************************Modbus RTU£¨adda£©***********************************/
+1203   1                      while(WorkMode==8)
+1204   1                      {
+1205   2                              if(modrecok==1)
+1206   2                              {
+1207   3                                      if(modRbuf[0]==MyAddr && modRbuf[1]==0x03) //dizhi+AD 
+1208   3                                      {
+1209   4                                              
+1210   4                                              crcr=erheyi(modRbuf[7],modRbuf[6]);/////////////////crc16
+1211   4                                              
+1212   4                                              if(crc16(modRbuf,6)==crcr)
+1213   4                                              {
+1214   5      
+1215   5                                                      if(modRbuf[3]+modRbuf[5]>8 || modRbuf[2]>0 || modRbuf[4]>0) //ÊäÈë´íÎóÅÐ¶Ï
+1216   5                                                      {
+1217   6                                                              modTbuf[0]=modRbuf[0];
+1218   6                                                              modTbuf[1]=modRbuf[1]|0x80;
+1219   6                                                              modTbuf[2]=0;
+1220   6                                                              crct=crc16(modTbuf,3);//¸öÊýÒª¸Ä
+1221   6                                                              modTbuf[3]=crct&0x00ff;//bufÎ»ÖÃ¸Ä
+1222   6                                                              modTbuf[4]=crct>>8;     
+1223   6                                                              //UART0_SendBuf(modTbuf,5);                                             
+1224   6                                                      }
+1225   5                                                      else
+1226   5                                                      {
+1227   6                                              //      UART_Send(0x05);
+1228   6                                                              for(i=0;i<modRbuf[5];i++)
+1229   6                                                              {
+1230   7                                                                      ADC_Start(modRbuf[3]+i);
+1231   7                                                                      modTbuf[3+i*2]=ADC0H;
+1232   7                                                              modTbuf[4+i*2]=ADC0L;
+C51 COMPILER V9.02   ZK1                                                                   08/24/2016 13:29:35 PAGE 21  
+
+1233   7                                                              }
+1234   6                                                              modTbuf[0]=modRbuf[0];
+1235   6                                                              modTbuf[1]=modRbuf[1];
+1236   6                                                              modTbuf[2]=modRbuf[5]*2;
+1237   6                                                              crct=crc16(modTbuf,3+modRbuf[5]*2);//¸öÊýÒª¸Ä
+1238   6                                                              modTbuf[3+modRbuf[5]*2]=crct&0x00ff;//bufÎ»ÖÃ¸Ä
+1239   6                                                              modTbuf[4+modRbuf[5]*2]=crct>>8;
+1240   6                                                              UART0_SendBuf(modTbuf,5+modRbuf[5]*2);//·¢ËÍ¸öÊýÒª¸Ä
+1241   6                                                      }
+1242   5                                              }
+1243   4                                      }
+1244   3                                      else if(modRbuf[0]==MyAddr && modRbuf[1]==0x06)//dizhi+DA+DO
+1245   3                                      {
+1246   4                                              crcr=erheyi(modRbuf[7],modRbuf[6]);
+1247   4                                              if(crc16(modRbuf,6)==crcr)
+1248   4                                              {
+1249   5                                                      if(modRbuf[2]>0 || modRbuf[3]<0x08 || modRbuf[3]>0x0a)
+1250   5                                                      {
+1251   6                                                              modTbuf[0]=modRbuf[0];
+1252   6                                                              modTbuf[1]=modRbuf[1]|0x80;
+1253   6                                                              modTbuf[2]=0;
+1254   6                                                              crct=crc16(modTbuf,3);//¸öÊýÒª¸Ä
+1255   6                                                              modTbuf[3]=crct&0x00ff;//bufÎ»ÖÃ¸Ä
+1256   6                                                              modTbuf[4]=crct>>8;     
+1257   6                                                              //UART0_SendBuf(modTbuf,5);                                             
+1258   6                                                      }
+1259   5                                                      else 
+1260   5                                                      {       
+1261   6                                                              if(modRbuf[3]==0x08)  //DA0×ª»»
+1262   6                                                              {
+1263   7                                                              DAC0L=modRbuf[5];               //µÍÎ»
+1264   7                                                                      DAC0H=modRbuf[4];      //¸ßÎ»
+1265   7                                                              }
+1266   6                                                              if(modRbuf[3]==0x09)  //DA1×ª»»
+1267   6                                                              {
+1268   7                                                              DAC1L=modRbuf[5];               //µÍÎ»
+1269   7                                                                      DAC1H=modRbuf[4];      //¸ßÎ»
+1270   7                                                              }
+1271   6                                                              if(modRbuf[3]==0x0a)  //DA0×ª»»
+1272   6                                                              {
+1273   7                                                              P6=~modRbuf[5];         //µÍÎ»
+1274   7                                                              }
+1275   6      
+1276   6                                                              for(i=0;i<8;i++)
+1277   6                                                                      modTbuf[i]=modRbuf[i];
+1278   6      
+1279   6                                                              UART0_SendBuf(modTbuf,8);
+1280   6                                                      }
+1281   5                                              }
+1282   4                                      }
+1283   3                                      modrecok=0;
+1284   3                              }//recok
+1285   2              
+1286   2                      }//5
+1287   1      }
+1288          
+1289          //ADC0×ª»»Æô¶¯
+1290          void ADC_Start(uchar source)
+1291          {
+1292   1          AMX0SL = source;      //Ñ¡ÔñÍ¨µÀ
+1293   1              AD0INT = 0;
+1294   1              AD0BUSY = 1;          //Æô¶¯AD×ª»»
+C51 COMPILER V9.02   ZK1                                                                   08/24/2016 13:29:35 PAGE 22  
+
+1295   1              while (!AD0INT){}         //µÈ´ý×ª»»Íê³É
+1296   1              AD0INT =0;
+1297   1                                                              //Á½´Î×ª»»
+1298   1              AD0BUSY = 1;          //Æô¶¯AD×ª»»
+1299   1              while (!AD0INT){}         //µÈ´ý×ª»»Íê³É
+1300   1              AD0INT =0;
+1301   1      } 
+1302          
+1303          //UARTÍ¨Ñ¶·¢ËÍ
+1304          void UART_Send(uchar sdata)
+1305          {
+1306   1              SBUF0=sdata;
+1307   1              while(TI0==0){;}
+1308   1              TI0=0;
+1309   1      }
+1310          
+1311          //UARTÍ¨Ñ¶·¢ËÍÊý¾Ý°ü
+1312          void UART0_SendBuf(uchar* buf, uchar len)
+1313          {
+1314   1              uchar num;
+1315   1              
+1316   1              for(num=0;num<len;num++)
+1317   1              {
+1318   2                      
+1319   2                      SBUF0=buf[num];
+1320   2                      while(TI0==0){;}
+1321   2                      TI0=0;
+1322   2              }
+1323   1              
+1324   1      }
+1325          
+1326          bit RstDS1820(void)             //·µ»Ø0-ÓÐÉè±¸Á¬½Ó1-ÎÞÉè±¸Á¬½Ó
+1327          {
+1328   1              unsigned char i;
+1329   1              bit RstFlag;
+1330   1              RstFlag=1;      
+1331   1              DataPort_Set0;
+1332   1              for (i=0;i<40;i++)              //480us ÑÓÊ±
+1333   1                      Delay15us(); 
+1334   1              DataPort_Set1;
+1335   1              for(i=0;i<4;i++)                        //15us-60us ÑÓÊ±
+1336   1              {
+1337   2                      Delay15us();
+1338   2              }
+1339   1              for (i=0;i<16;i++)                      //60us-240us ÑÓÊ±
+1340   1              {
+1341   2                      Delay15us();
+1342   2                      if (DataPort_Status==0) RstFlag=0;
+1343   2              }
+1344   1              for (i=0;i<16;i++)                      //240us
+1345   1              {
+1346   2                      Delay15us();
+1347   2              }
+1348   1              return RstFlag; 
+1349   1      }
+1350          
+1351          void Delay1us(unsigned char us)  //ÑÓÊ±
+1352          {
+1353   1              while (us)
+1354   1              {
+1355   2                      _nop_(); _nop_(); _nop_(); _nop_(); _nop_();
+1356   2                      --us;
+C51 COMPILER V9.02   ZK1                                                                   08/24/2016 13:29:35 PAGE 23  
+
+1357   2              }
+1358   1      }
+1359          void Delay15us(void)  
+1360          {
+1361   1              Delay1us(15);                  //ÑÓÊ±15Ãë
+1362   1      }
+1363          void Delay10us(void)
+1364          {       
+1365   1              Delay1us(10);
+1366   1      }
+1367          
+1368          void WriteDS1820(unsigned char ch)
+1369          {
+1370   1      unsigned char i;
+1371   1              DataPort_Set1;
+1372   1              Delay1us(1);
+1373   1              for (i=0;i<8;i++)
+1374   1              {
+1375   2                      EA=0;
+1376   2                      DataPort_Set0;
+1377   2                      Delay15us();
+1378   2                      P4 |= ch&0x1;
+1379   2                      EA=1;
+1380   2                      Delay15us();Delay15us();Delay15us();
+1381   2                      DataPort_Set1;
+1382   2                      ch=ch>>1;
+1383   2                      Delay1us(1);
+1384   2              }
+1385   1      }
+1386          unsigned char ReadDS1820(void)
+1387          {
+1388   1              unsigned char i,ch;
+1389   1              ch=0;
+1390   1              DataPort_Set1;
+1391   1              Delay1us(1);
+1392   1              for (i=0;i<8;i++)
+1393   1              {
+1394   2                      EA=0;
+1395   2                      DataPort_Set0;
+1396   2                      Delay10us();
+1397   2                      DataPort_Set1;
+1398   2                      Delay1us(2);
+1399   2                      ch=ch>>1;
+1400   2                      if (P4&0x01==1)
+1401   2                      {
+1402   3                              ch=ch+0x80;
+1403   3                      }
+1404   2                      EA=1;
+1405   2                      Delay15us();Delay15us();Delay15us();
+1406   2              }       
+1407   1              return ch;
+1408   1      }
+1409          void SkipROMCode(void)       //Ö÷»ú·¢Ìø¹ý¶ÁÐòÁÐºÅµÄ²Ù×÷ÃüÁî:0xcc
+1410          {
+1411   1              RstDS1820();
+1412   1              WriteDS1820(0xcc);
+1413   1      }
+1414          
+1415          void StartDS(void)
+1416          {
+1417   1              if(RstDS1820()) UART_Send(0x80);;                       //¸´Î»
+1418   1              WriteDS1820(0xcc);              //¹ã²¥
+C51 COMPILER V9.02   ZK1                                                                   08/24/2016 13:29:35 PAGE 24  
+
+1419   1              WriteDS1820(0x44);              //Æô¶¯ÎÂ¶È×ª»»×ª»» 12bit700ms
+1420   1      }
+1421          unsigned int GetTempValue(void)//¶ÁÈ¡ÎÂ¶ÈÖµµÄ³ÌÐò
+1422          {
+1423   1              
+1424   1              unsigned int T;
+1425   1      
+1426   1              sleep_ms(250);
+1427   1              sleep_ms(250);
+1428   1              sleep_ms(250);
+1429   1              SkipROMCode();
+1430   1              WriteDS1820(0xBE);  //·¢²¼¶ÁÈ¡ÎÂ¶ÈÖµµÄÃüÁî(0xBE)
+1431   1              
+1432   1              TL=ReadDS1820();
+1433   1              TH=ReadDS1820();
+1434   1      
+1435   1              StartDS();        //
+1436   1              
+1437   1              T=TL+TH*256;
+1438   1              /*
+1439   1              if (T==0xffff) return 0xffff;
+1440   1              if (T>0x8000)                      //ÎÂ¶ÈÎª¸ººÅ
+1441   1              {
+1442   1                      T=-T;
+1443   1                      return(0x8000+T*5/8);          //¼ÆËãÎÂ¶ÈÖµ
+1444   1              }
+1445   1              else                               //ÎÂ¶ÈÎªÕýºÅ
+1446   1                      return(T*5/8);
+1447   1                      */
+1448   1              return T;
+1449   1      }
+1450          
+1451          void Init18b20(void)
+1452          {
+1453   1              SkipROMCode();                        //Ö÷»ú·¢Ìø¹ý¶ÁÐòÁÐºÅµÄ²Ù×÷ÃüÁî:0xcc
+1454   1              WriteDS1820(0x44);                    //Æô¶¯ÎÂ¶È×ª»»
+1455   1      }
+1456          
+1457          void GetAddr(void)  //µÃµ½µ¥Æ¬»úµØÖ·
+1458          {
+1459   1              if(A0) MyAddr+=1;     
+1460   1              if(A1) MyAddr+=2;
+1461   1              if(A2) MyAddr+=4;
+1462   1              if(A3) MyAddr+=8;
+1463   1              MyAddr1=HEXASC_high(MyAddr);  //ASCµØÖ·
+1464   1              MyAddr2=HEXASC_low(MyAddr);
+1465   1      
+1466   1      }
+1467          
+1468          void SetBaud(void)  
+1469          {
+1470   1              if(baud_mode == 0 || baud_mode == 0x40 || baud_mode == 0xc0 || baud_mode==0x20 || baud_mode==0xa0 ||baud_
+             -mode==0x60) 
+1471   1              {
+1472   2                      //9600
+1473   2                      RCAP2H = 0xFF;  // Timer 2 Capture Register High Byte
+1474   2              RCAP2L = 0xDC;  // Timer 2 Capture Register Low Byte
+1475   2              }
+1476   1      
+1477   1              
+1478   1      
+1479   1      }
+C51 COMPILER V9.02   ZK1                                                                   08/24/2016 13:29:35 PAGE 25  
+
+1480          
+1481          void sleep_ms(unsigned int count)      //ÑÓÊ±
+1482          {
+1483   1              unsigned char ii,jj;
+1484   1              for(ii=0;ii<count;ii++)
+1485   1              {
+1486   2                      for(jj=0;jj<250;jj++)
+1487   2                      _nop_();
+1488   2              }
+1489   1      }
+1490          //////////////////¶¨Ê±Æ÷1///////////////////////
+1491          void time1() interrupt 3
+1492          {       
+1493   1      //      modrecok=1;//   
+1494   1      //      modwei=0;
+1495   1      
+1496   1              matrecok=1;
+1497   1              matwei=0;
+1498   1      
+1499   1      
+1500   1          TR1=0;
+1501   1          TH1=0xf0;
+1502   1              TL1=0x5f;
+1503   1      //      timeoutcnt=1;
+1504   1      //      TR1=1;
+1505   1      //      timeoutcnt=0;
+1506   1      
+1507   1              
+1508   1              
+1509   1      }
+1510          /////////////////////////////////////////////
+1511          void uart0_ISR(void) interrupt 4  //´®¿ÚÖÐ¶Ï·þÎñ³ÌÐò
+1512          {
+1513   1              uchar m; uchar sbuf; uchar matbuf;
+1514   1              uchar labbuf;
+1515   1              uchar modbuf;
+1516   1              bit flag1;
+1517   1              bit flagmat1;
+1518   1              bit flaglab1;
+1519   1      //      uchar matwei;
+1520   1      //      uchar imat;
+1521   1              if(RI0) //ENQ.......EOT,CRC
+1522   1              {
+1523   2                      
+1524   2                      ceshi=1;
+1525   2                      matjishu++;
+1526   2      
+1527   2                      RI0=0;m=SBUF0;  sbuf=m;  
+1528   2                      matbuf=sbuf;
+1529   2                      labbuf=matbuf;
+1530   2                      modbuf=labbuf;
+1531   2                      if(baud_mode == 0x00)
+1532   2              {
+1533   3                      if(last==ENQ &&(m==MyAddr ||m=='R' || m=='W'))  Rptr=0;  //¼à²â³õÊ¼¼¸Î»£¬Âú×ãÒªÇó¾ÍÊÇHEX  
+1534   3                      if(Rptr<BufMax) 
+1535   3                      {  
+1536   4                        Rbuf[Rptr]=m; Rptr++; 
+1537   4                      }
+1538   3                  if(last==EOT)   RecvOk=1; 
+1539   3                      if(Rptr==3 )
+1540   3                         {
+1541   4                                if(Rbuf[0]==MyAddr)   //¼ÇÂ¼ÉÏÎ»»úÊÇ·ñÔÚÑ¯ÎÊ±¾»ú±êÖ¾Î»£¬Èç¹ûÊÇÔòÖÃ1
+C51 COMPILER V9.02   ZK1                                                                   08/24/2016 13:29:35 PAGE 26  
+
+1542   4                                {
+1543   5                              flag=1; //      SCON0 = SCON0 | 0x20;//ÓÃÀ´ÅÐ¶ÏÊÇµØÖ·ÇëÇó»¹ÊÇÊý¾ÝÇëÇó
+1544   5                         }
+1545   4                              }
+1546   3                      last=m;
+1547   3              }
+1548   2                 //////////////////ASC///////////////////////
+1549   2                 if(baud_mode == 0x40)
+1550   2               {
+1551   3                 if(former2==Start &&(former1==MyAddr1) &&(sbuf==MyAddr2))
+1552   3                      {
+1553   4                      flag1=1,count=2;
+1554   4                      
+1555   4                      }
+1556   3                      if(flag1==1)
+1557   3                      {
+1558   4                              recbuf[0]=Start;
+1559   4                              recbuf[1]=MyAddr1;
+1560   4                              recbuf[count]=sbuf;
+1561   4                      count++;
+1562   4              
+1563   4                      
+1564   4                       if(sbuf==End)
+1565   4                              {
+1566   5                              recok=1;
+1567   5                              count=0;
+1568   5                              flag1=0;
+1569   5                                              
+1570   5                              }
+1571   4                      }
+1572   3                      former2=former1;
+1573   3                      former1=sbuf;
+1574   3              }
+1575   2                      //////////////////////////////matlab//////////
+1576   2      /*              if(baud_mode == 0xc0)
+1577   2              {
+1578   2      
+1579   2                      if(matbuf1==matStart && matbuf0==MyAddr1 && matbuf==MyAddr2) // &&  MyAddr 
+1580   2                      {
+1581   2              //      matrecok=1;
+1582   2                              flagmat1=1;
+1583   2                              matwei=2;
+1584   2                      }
+1585   2                      if(flagmat1==1)
+1586   2                      {
+1587   2                              matRbuf[0]=matStart;
+1588   2                              matRbuf[1]=MyAddr1;
+1589   2                              matRbuf[matwei]=matbuf;
+1590   2                              matwei++;
+1591   2                              if(matbuf0==matEnd1 && matbuf==matEnd2)
+1592   2                              {
+1593   2                              matrecok=1;
+1594   2                              matwei=0;
+1595   2                              flagmat1=0;
+1596   2                              }
+1597   2                      }
+1598   2                      matbuf1=matbuf0;
+1599   2                      matbuf0=matbuf;
+1600   2              } */
+1601   2              if(baud_mode == 0xc0)
+1602   2              {
+1603   3                          TH1=0xf0;
+C51 COMPILER V9.02   ZK1                                                                   08/24/2016 13:29:35 PAGE 27  
+
+1604   3                              TL1=0x5f;
+1605   3                              TR1=1;
+1606   3                              matRbuf[matwei]=matbuf;
+1607   3                              matwei++;
+1608   3              }
+1609   2                      //////////////////////////////labview/////////////////
+1610   2                      if(baud_mode == 0x20)
+1611   2                      {       
+1612   3              //              aaaaa=1;
+1613   3                              if(labbuf0==labStart && labbuf==MyAddr)
+1614   3                              {
+1615   4                                      flaglab1=1;//×ÖÍ·±êÖ¾
+1616   4                                      labwei=1;
+1617   4                                      
+1618   4                              }
+1619   3                              if(flaglab1==1)
+1620   3                              {
+1621   4                                      labRbuf[0]=labStart;
+1622   4                                      labRbuf[labwei]=labbuf;
+1623   4                                      labwei++;
+1624   4                                      if(labbuf==labEnd)
+1625   4                                      {
+1626   5                                      labrecok=1;
+1627   5                                      labwei=0;
+1628   5                                      flaglab1=0;
+1629   5                                      }
+1630   4                              }
+1631   3                              labbuf0=labbuf;
+1632   3                       }
+1633   2                       //////////////////////ÑÐ»ªmodbus////////////////////////
+1634   2                       if(baud_mode == 0xa0)
+1635   2                       {
+1636   3                      //      if(modrecok==1)
+1637   3                      //      {modwei=0;}
+1638   3                              
+1639   3                              TH1=0xf0;
+1640   3                              TL1=0x5f;
+1641   3                              TR1=1;
+1642   3                              modRbuf[modwei]=modbuf;
+1643   3                              modwei++;
+1644   3                              if(modwei == 8)
+1645   3                              {
+1646   4                                      modrecok=1;//   
+1647   4                                      modwei=0;
+1648   4                              }
+1649   3                       }
+1650   2                      ////////////////////////////////////
+1651   2                       if(baud_mode == 0x60)
+1652   2                       {
+1653   3                      //      if(modrecok==1)
+1654   3                      //      {modwei=0;}
+1655   3                              
+1656   3                              TH1=0xf0;
+1657   3                              TL1=0x5f;
+1658   3                              TR1=1;
+1659   3                              modRbuf[modwei]=modbuf;
+1660   3                              modwei++;
+1661   3                              if(modwei == 8)
+1662   3                              {
+1663   4                                      modrecok=1;//   
+1664   4                                      modwei=0;
+1665   4                              }
+C51 COMPILER V9.02   ZK1                                                                   08/24/2016 13:29:35 PAGE 28  
+
+1666   3                       }
+1667   2        
+1668   2                      
+1669   2              
+1670   2              }//RI0
+1671   1       
+1672   1      }
+*** WARNING C280 IN LINE 1517 OF ZK1.C: 'flagmat1': unreferenced local variable
+1673          
+1674          
+1675          
+1676          
+1677          void CheckCRC()
+1678          {
+1679   1        uchar i,n,crc;
+1680   1        n=Rptr;
+1681   1        crc=ENQ;
+1682   1        for(i=0;i<n;i++) crc^=Rbuf[i];
+1683   1        if(crc==0) CRCok=1;
+1684   1        else CRCok=0;
+1685   1      }
+1686          
+1687          /************************************************************
+1688          *******************ÏÂÃæÊÇASCµÄµ×²ã***************************
+1689          *************************º¯Êý****************************
+1690          ********************************************************/
+1691          
+1692          
+1693          
+1694          /******************¶ÁÈ¡Êý¾ÝÀàÐÍý*******************************/
+1695          uchar read_write_flag()
+1696          {
+1697   1      uchar temp;
+1698   1      if(recbuf[4]>0x40)temp=(recbuf[4]-0x37)&0x0f;
+1699   1            else   temp=(recbuf[4]-0x30)&0x0f;
+1700   1      return temp;
+1701   1      }
+1702          /******************Êý¾Ý×ª»»ASC>>hexý*******************************/
+1703          uchar Dat_trans(uchar hight_v,uchar low_v)
+1704          {
+1705   1            uchar value,hight,low;
+1706   1            if (hight_v>0x40)hight=hight_v-0x37;
+1707   1                else hight=hight_v-0x30;
+1708   1            if (low_v>0x40)low=low_v-0x37;
+1709   1                  else low=low_v-0x30;
+1710   1            value=(hight&0x0f)<<4;
+1711   1            value+=(low&0x0f);
+1712   1              return value;
+1713   1      }
+1714          /***********************HEX>>ASC***********************************************/
+1715          uchar HEXASC_high(uchar tempv)
+1716               { 
+1717   1                               uchar hight,ctmp1;
+1718   1                               ctmp1=(tempv>>4);
+1719   1            if(ctmp1>9) hight=0x40+ctmp1%9;
+1720   1            else hight=ctmp1+0x30;
+1721   1                              return hight;
+1722   1           }
+1723          uchar HEXASC_low(uchar tempv)
+1724               { 
+1725   1                               uchar low,ctmp2;
+1726   1                               ctmp2=tempv&0x0f;
+C51 COMPILER V9.02   ZK1                                                                   08/24/2016 13:29:35 PAGE 29  
+
+1727   1            if(ctmp2>9) low=0x40+ctmp2%9;
+1728   1            else low=ctmp2+0x30;
+1729   1                              return low;
+1730   1           }
+1731          
+1732          /******************¶ÁÐ´ÃüÁîÓ¦´ð356*******************************/
+1733          void write_inform(uchar dat)
+1734          {
+1735   1            uchar xordat,i,ctmp1,ctmp2,send_temp;
+1736   1      
+1737   1            Answer[3]=dat; Answer[4]=dat;
+1738   1            xordat=0;
+1739   1            for(i=1; i<5; i++)
+1740   1                                      {xordat^=Answer[i];}
+1741   1            send_temp=xordat;
+1742   1          ctmp1=(send_temp>>4)&0x0f;    
+1743   1                              if  (ctmp1>9)
+1744   1                                      Answer[5]=ctmp1%9+0x40;
+1745   1            else 
+1746   1                                      Answer[5]=ctmp1+0x30;
+1747   1            ctmp2=send_temp&0x0f;     
+1748   1                              if (ctmp2>9)
+1749   1                                      Answer[6]=ctmp2%9+0x40;
+1750   1            else 
+1751   1                                      Answer[6]=ctmp2+0x30;
+1752   1           // uartsends(Answer,8);
+1753   1                              Answer[0]=0x40;
+1754   1                              Answer[1]=recbuf[1];
+1755   1                              Answer[2]=recbuf[2];
+1756   1                              Answer[7]=0x0d;
+1757   1                              UART0_SendBuf(Answer,8);
+1758   1      }
+1759          /*****************¶ÁÃüÁîÓ¦´ð£¬·¢³öÊý¾Ý*******************************/
+1760          void Read_byte()
+1761          {
+1762   1      uchar ctmp1,ctmp2,xordat,i,send_temp;
+1763   1      send_temp=dat[Dat_trans(recbuf[7],recbuf[8])];
+1764   1      ctmp1=(send_temp>>4);
+1765   1      if(ctmp1>9) sendbuf[5]=0x40+ctmp1%9;
+1766   1            else sendbuf[5]=ctmp1+0x30;
+1767   1      ctmp2=send_temp&0x0f;
+1768   1      if(ctmp2>9) sendbuf[6]=0x40+ctmp2%9;
+1769   1      else sendbuf[6]=ctmp2+0x30;
+1770   1       xordat=0;
+1771   1      for(i=1;i<7;i++)xordat^=sendbuf[i];
+1772   1      send_temp=xordat;
+1773   1      ctmp1=(send_temp>>4)&0x0f;
+1774   1      if(ctmp1>9)sendbuf[7]=ctmp1%9+0x40;
+1775   1            else sendbuf[7]=ctmp1+0x30;
+1776   1      ctmp2=send_temp&0x0f;
+1777   1      if(ctmp2>9)sendbuf[8]=ctmp2%9+0x40;
+1778   1            else sendbuf[8]=ctmp2+0x30;
+1779   1              //uartsends(sendbuf,10);
+1780   1      UART0_SendBuf(sendbuf, 10);
+1781   1      }
+1782          /***************ÆæÊýÅ¼Ê*Òì»òÐ£Ñé*******************************/
+1783          bit check_CRC()
+1784          {
+1785   1      uchar xordat,i,ctmp1,ctmp2,temp;
+1786   1      if(((read_write_flag())&0x01)==Read)temp=11;
+1787   1      else if(((read_write_flag())&0x01)==Write)
+1788   1              temp=13;
+C51 COMPILER V9.02   ZK1                                                                   08/24/2016 13:29:35 PAGE 30  
+
+1789   1      xordat=recbuf[1];
+1790   1      for(i=2;i<temp;i++)xordat^=recbuf[i];
+1791   1      ctmp1=xordat&0x0f;
+1792   1      ctmp1>>=4;
+1793   1      ctmp1+=0x30;
+1794   1      ctmp2=xordat&0x0f;
+1795   1      ctmp2+=0x30;
+1796   1      if((ctmp1==recbuf[temp])&&(ctmp2==recbuf[temp+1]))
+1797   1      return 1;
+1798   1      else return 0;
+1799   1      }
+1800          /*****************Ð´Êý¾Ýµ¥Æ¬»úÓ¦´ðý*******************************/
+1801          void Write_byte()
+1802          {
+1803   1      uchar temp;
+1804   1      temp=Dat_trans(recbuf[11],recbuf[12]);
+1805   1      dat[Dat_trans(recbuf[7],recbuf[8])]=temp;
+1806   1      write_inform('#');
+1807   1      }
+1808          
+1809          
+1810          /******************************CRC16***********************************
+1811          ********************************Ð£Ñé********************************/
+1812          uint crc16(uchar*str,uint num)
+1813          {
+1814   1              uint i,j,c,crc;
+1815   1              crc=0xffff;
+1816   1              for(i=0;i<num;i++)
+1817   1              {
+1818   2                      c=str[i]&0x00ff;
+1819   2                      crc^=c;
+1820   2                      for(j=0;j<8;j++)
+1821   2                      {
+1822   3                              if(crc&0x0001)
+1823   3                              {
+1824   4                                 crc>>=1;
+1825   4                                 crc^=0xa001;
+1826   4                              }
+1827   3                              else
+1828   3                              {crc>>=1;}
+1829   3                      }//for2
+1830   2              }//for1
+1831   1              return(crc);
+1832   1      }//int
+1833          
+1834          uint erheyi(uchar high,uchar low)
+1835          {
+1836   1              uint he;
+1837   1              he=(high<<8)|low;
+1838   1              return he;
+1839   1      }
+
+
+MODULE INFORMATION:   STATIC OVERLAYABLE
+   CODE SIZE        =   6433    ----
+   CONSTANT SIZE    =   ----    ----
+   XDATA SIZE       =    368    ----
+   PDATA SIZE       =   ----    ----
+   DATA SIZE        =     49      49
+   IDATA SIZE       =   ----    ----
+   BIT SIZE         =      3       4
+END OF MODULE INFORMATION.
+
+C51 COMPILER V9.02   ZK1                                                                   08/24/2016 13:29:35 PAGE 31  
+
+
+C51 COMPILATION COMPLETE.  1 WARNING(S),  0 ERROR(S)
